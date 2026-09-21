@@ -1,0 +1,6 @@
+asset/
+tmp/
+
+app/backend/__pycache__/
+app/frontend/node_modules/
+

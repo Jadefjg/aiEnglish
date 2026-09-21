@@ -1,0 +1,971 @@
+{
+  "generated_at": "2026-09-21",
+  "pdfs": [
+    {
+      "filename": "（11个功能）领智云英语APP学生使用教程(1).pdf",
+      "page_count": 48,
+      "bytes": 12810711,
+      "pages_with_text": 13,
+      "pages": [
+        {
+          "page": 1,
+          "text_chars": 9,
+          "text": "英语APP使用教程"
+        },
+        {
+          "page": 2,
+          "text_chars": 386,
+          "text": "目录\n1.点读教材智能纠音（学生端）………………………………（3—7）\n2.分享视频配音作品（学生端）………………………………（8—10）\n3.报听写功能（学生端）………………………………………（11—20）\n4.如何切换两个学员账号（学生端）…………………………（21—23）\n5.如何查看老师点评（学生端）………………………………（24—26）\n6.家长通功能（小程序）………………………………………（27—29）\n7.如何使用阅读区（学生端）……………………………………（30—34）\n8.校内教材同步学（学生端）……………………………………（35—39）\n9.AI自习室如何使用（学生端）………………………………（40—42）\n10.学霸错题本（学生端）………………………………（43—45）\n11.磨耳朵功能使用指南（学生端）……………………………（46—48）"
+        },
+        {
+          "page": 3,
+          "text_chars": 25,
+          "text": "01.\n点读教材智能纠音\nP A R T  0 1"
+        },
+        {
+          "page": 4,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 5,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 6,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 7,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 8,
+          "text_chars": 25,
+          "text": "02.\n分享视频配音作品\nP A R T  0 1"
+        },
+        {
+          "page": 9,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 10,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 11,
+          "text_chars": 22,
+          "text": "03.\n报听写功能\nP A R T  0 1"
+        },
+        {
+          "page": 12,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 13,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 14,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 15,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 16,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 17,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 18,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 19,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 20,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 21,
+          "text_chars": 27,
+          "text": "04.\n如何切换两个学员账号\nP A R T  0 1"
+        },
+        {
+          "page": 22,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 23,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 24,
+          "text_chars": 25,
+          "text": "05.\n如何查看老师点评\nP A R T  0 1"
+        },
+        {
+          "page": 25,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 26,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 27,
+          "text_chars": 22,
+          "text": "06.\n家长通功能\nP A R T  0 1"
+        },
+        {
+          "page": 28,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 29,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 30,
+          "text_chars": 24,
+          "text": "07.\n如何使用阅读区\nP A R T  0 1"
+        },
+        {
+          "page": 31,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 32,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 33,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 34,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 35,
+          "text_chars": 23,
+          "text": "8.\n校内教材同步学\nP A R T  0 1"
+        },
+        {
+          "page": 36,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 37,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 38,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 39,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 40,
+          "text_chars": 25,
+          "text": "9.\n自学神器AI自习室\nP A R T  0 1"
+        },
+        {
+          "page": 41,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 42,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 43,
+          "text_chars": 22,
+          "text": "10.\n学霸错题本\nP A R T  0 1"
+        },
+        {
+          "page": 44,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 45,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 46,
+          "text_chars": 26,
+          "text": "11.\n磨耳朵功能使用指南\nP A R T  0 1"
+        },
+        {
+          "page": 47,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 48,
+          "text_chars": 0,
+          "text": ""
+        }
+      ]
+    },
+    {
+      "filename": "（8个功能）领智云英语APP老师使用教程(1).pdf",
+      "page_count": 45,
+      "bytes": 11221230,
+      "pages_with_text": 10,
+      "pages": [
+        {
+          "page": 1,
+          "text_chars": 9,
+          "text": "英语APP使用教程"
+        },
+        {
+          "page": 2,
+          "text_chars": 273,
+          "text": "目录\n5.如何进行作品批注（教师端）………………………………（3—6）\n7.如何设置分销商品（管理后台）…………………………（7—9）\n3.打卡作业操作指南（教师端）………………………………（10—12）\n4.APP更换皮肤（管理后台端）…………………………………（13—15）\n5.快捷添加课本作业（教师端）…………………………（16—22）\n6.如何分类教材（教师端）………………………………（23—25）\n7.教材内容使用指南（管理后台）…………………………（26—34）\n8.如何电脑直播（教师端）…………………………………（53—44)"
+        },
+        {
+          "page": 3,
+          "text_chars": 25,
+          "text": "01.\n如何进行作品批注\nP A R T  0 1"
+        },
+        {
+          "page": 4,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 5,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 6,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 7,
+          "text_chars": 25,
+          "text": "02.\n如何设置分销商品\nP A R T  0 1"
+        },
+        {
+          "page": 8,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 9,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 10,
+          "text_chars": 25,
+          "text": "03.\n打卡作业操作指南\nP A R T  0 1"
+        },
+        {
+          "page": 11,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 12,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 13,
+          "text_chars": 24,
+          "text": "04.\nAPP更换皮肤\nP A R T  0 1"
+        },
+        {
+          "page": 14,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 15,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 16,
+          "text_chars": 25,
+          "text": "05.\n快捷添加课本作业\nP A R T  0 1"
+        },
+        {
+          "page": 17,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 18,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 19,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 20,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 21,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 22,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 23,
+          "text_chars": 23,
+          "text": "06.\n如何分类教材\nP A R T  0 1"
+        },
+        {
+          "page": 24,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 25,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 26,
+          "text_chars": 25,
+          "text": "07.\n教材内容使用指南\nP A R T  0 1"
+        },
+        {
+          "page": 27,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 28,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 29,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 30,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 31,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 32,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 33,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 34,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 35,
+          "text_chars": 23,
+          "text": "08.\n如何电脑直播\nP A R T  0 1"
+        },
+        {
+          "page": 36,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 37,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 38,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 39,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 40,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 41,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 42,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 43,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 44,
+          "text_chars": 0,
+          "text": ""
+        },
+        {
+          "page": 45,
+          "text_chars": 0,
+          "text": ""
+        }
+      ]
+    }
+  ],
+  "videos": [
+    {
+      "filename": "91026e40e274c40f6e53a80410b01565.mp4",
+      "bytes": 7708734,
+      "sha256": "c5381bd0792e38445a0243fe1064b90f4110b9d7053207b5dd4177ae231c6ce9",
+      "duration_seconds": 99.867,
+      "sample_points_seconds": [
+        0,
+        24.967,
+        49.933,
+        74.9,
+        98.867
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 592
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122548.mp4",
+      "bytes": 9784172,
+      "sha256": "805dbd980d10300441b29257aec07e533bee0bb31393937fb7967ef53eb68a5e",
+      "duration_seconds": 228.4,
+      "sample_points_seconds": [
+        0,
+        57.1,
+        114.2,
+        171.3,
+        227.4
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122606.mp4",
+      "bytes": 8702560,
+      "sha256": "addf8d6f2e2ee6fc1b54ba6345d7024b478664094026e3b22fb3a7655e64807f",
+      "duration_seconds": 191.077,
+      "sample_points_seconds": [
+        0,
+        47.769,
+        95.538,
+        143.308,
+        190.077
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122619.mp4",
+      "bytes": 8609873,
+      "sha256": "6ddc4aaa1312ac44d76e896ae5414600863b07eecf7ae6679fd2627dd2c627e9",
+      "duration_seconds": 159.593,
+      "sample_points_seconds": [
+        0,
+        39.898,
+        79.796,
+        119.694,
+        158.593
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122635.mp4",
+      "bytes": 9648901,
+      "sha256": "4c8f9ef36a0f8386847327ec7d394c9b9f71c44440c2a074463bbcd71ae268e8",
+      "duration_seconds": 232.76,
+      "sample_points_seconds": [
+        0,
+        58.19,
+        116.38,
+        174.57,
+        231.76
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122647.mp4",
+      "bytes": 9402140,
+      "sha256": "1ac4061f1bb1cf70690f58d222ee56773dea092b1c8dd271a38479b71652afe2",
+      "duration_seconds": 222.154,
+      "sample_points_seconds": [
+        0,
+        55.538,
+        111.077,
+        166.615,
+        221.154
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122705.mp4",
+      "bytes": 9402140,
+      "sha256": "1ac4061f1bb1cf70690f58d222ee56773dea092b1c8dd271a38479b71652afe2",
+      "duration_seconds": 222.154,
+      "sample_points_seconds": [
+        0,
+        55.538,
+        111.077,
+        166.615,
+        221.154
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": "微信视频_20260903122647.mp4"
+    },
+    {
+      "filename": "微信视频_20260903122717.mp4",
+      "bytes": 7078922,
+      "sha256": "127b6942a30447dfe2fdbdf23bb72d63d7dbb24282a3fe8fef5f90cd924ff43f",
+      "duration_seconds": 163.407,
+      "sample_points_seconds": [
+        0,
+        40.852,
+        81.704,
+        122.556,
+        162.407
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122732.mp4",
+      "bytes": 7299304,
+      "sha256": "fcef8e7737e91a5ca7fcfb82bddbf5bc6a19a31673c77f94048f5b2d6852e758",
+      "duration_seconds": 200.154,
+      "sample_points_seconds": [
+        0,
+        50.038,
+        100.077,
+        150.115,
+        199.154
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122742.mp4",
+      "bytes": 5286047,
+      "sha256": "dae12bd8179883339141a6f54d8cc86ee233acda703b8f39f1e5afa746b51233",
+      "duration_seconds": 92.733,
+      "sample_points_seconds": [
+        0,
+        23.183,
+        46.367,
+        69.55,
+        91.733
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 592
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122751.mp4",
+      "bytes": 4946621,
+      "sha256": "8aa88bd18d44d1ab27ebe801d2cea62885a34cf3ba6a7b268c7e43d1016bbe00",
+      "duration_seconds": 135.793,
+      "sample_points_seconds": [
+        0,
+        33.948,
+        67.897,
+        101.845,
+        134.793
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122818.mp4",
+      "bytes": 8034489,
+      "sha256": "30eb8b26e69d54d355b5735e2802bb43a21d01e7f727bf76f9ce62a2e3a40b56",
+      "duration_seconds": 251.92,
+      "sample_points_seconds": [
+        0,
+        62.98,
+        125.96,
+        188.94,
+        250.92
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122827.mp4",
+      "bytes": 3823595,
+      "sha256": "ec149d844a33b1cfceeb89d8532e3c8e08e01732ee1a47a93193586cbcf00806",
+      "duration_seconds": 104.833,
+      "sample_points_seconds": [
+        0,
+        26.208,
+        52.417,
+        78.625,
+        103.833
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 592
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122843.mp4",
+      "bytes": 6485693,
+      "sha256": "7b558221fa48db005d6cdf747ffbaf772c764ad6c75a5b4af9c0b990ee2a4a1b",
+      "duration_seconds": 156.357,
+      "sample_points_seconds": [
+        0,
+        39.089,
+        78.179,
+        117.268,
+        155.357
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122849.mp4",
+      "bytes": 7418690,
+      "sha256": "a843a4131f2a1b1b4e0731e83b8ae4c1a6d5ff293064a6418b3deafe3003051e",
+      "duration_seconds": 190.346,
+      "sample_points_seconds": [
+        0,
+        47.587,
+        95.173,
+        142.76,
+        189.346
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 448
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122900.mp4",
+      "bytes": 5555522,
+      "sha256": "416747e4351dc1c477771acbb9db12d4e8be5eff391d5df9bb57878540b383dc",
+      "duration_seconds": 87.2,
+      "sample_points_seconds": [
+        0,
+        21.8,
+        43.6,
+        65.4,
+        86.2
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 592
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    },
+    {
+      "filename": "微信视频_20260903122910.mp4",
+      "bytes": 5498839,
+      "sha256": "9598abbb4b8d2b71c0d56d9383e5b099dce5b862b72f7d76e54520152e368613",
+      "duration_seconds": 116.733,
+      "sample_points_seconds": [
+        0,
+        29.183,
+        58.367,
+        87.55,
+        115.733
+      ],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 592
+        },
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "duplicate_of": null
+    }
+  ],
+  "summary": {
+    "pdf_count": 2,
+    "pdf_pages": 93,
+    "video_count": 17,
+    "video_duration_seconds": 2855.481,
+    "duplicate_video_count": 1
+  }
+}
