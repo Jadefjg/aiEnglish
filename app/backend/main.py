@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import os
 import subprocess
 import base64
@@ -12,15 +13,29 @@ from urllib.parse import quote
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from backend.analytics import register_analytics_routes
+from backend.billing import register_billing_routes
+from backend.booking import register_booking_routes
+from backend.classes import register_class_routes
+from backend.curriculum import register_curriculum_routes
+from backend.homework import register_homework_routes
+from backend.lessons import register_lesson_routes
+from backend.media_progress import register_media_progress_routes
+from backend.notify import notify_status, register_notify_routes
+from backend.parents import register_parent_routes
+from backend.pronunciation import provider_status as pronunciation_provider_status
+from backend.storage import UPLOAD_DIR, ensure_local_dirs, public_or_presigned_url, read_bytes, storage_status
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSET_DIR = Path(os.getenv("ASSET_DIR", ROOT / "asset"))
 FRONTEND_DIR = ROOT / "app" / "frontend"
 CATALOG_PATH = Path(__file__).with_name("catalog.json")
 AUDIT_PATH = Path(__file__).with_name("reports") / "asset_audit.json"
+ensure_local_dirs()
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-change-this-secret")
@@ -30,12 +45,67 @@ _rate_lock = threading.Lock()
 _rate_buckets: dict[str, list[float]] = {}
 _failed_logins: dict[str, list[float]] = {}
 bearer = HTTPBearer(auto_error=False)
-app = FastAPI(title="领智云英语教程中心", version="2.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "PUT"], allow_headers=["*"])
+app = FastAPI(title="领智云英语教程中心", version="2.6.2")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+ASSET_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/assets", StaticFiles(directory=ASSET_DIR), name="assets")
 VUE_VENDOR_DIR = FRONTEND_DIR / "node_modules" / "vue" / "dist"
 if VUE_VENDOR_DIR.exists():
     app.mount("/vendor", StaticFiles(directory=VUE_VENDOR_DIR), name="vendor")
+
+
+def _safe_upload_key(file_path: str) -> str:
+    """Normalize upload key and reject path traversal."""
+    key = (file_path or "").replace("\\", "/").lstrip("/")
+    parts = [p for p in key.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        raise HTTPException(status_code=400, detail="invalid upload path")
+    key = "/".join(parts)
+    local = (UPLOAD_DIR / key).resolve()
+    root = UPLOAD_DIR.resolve()
+    try:
+        local.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid upload path") from exc
+    return key
+
+
+@app.get("/uploads/{file_path:path}")
+def serve_upload(file_path: str, request: Request):
+    """Serve local files or redirect/proxy S3/MinIO objects (multi-replica safe)."""
+    key = _safe_upload_key(file_path)
+    # Optional lock-down: UPLOAD_REQUIRE_AUTH=1 requires Bearer（默认关，兼容 <audio src>）
+    if os.getenv("UPLOAD_REQUIRE_AUTH", "0").strip().lower() in {"1", "true", "yes"}:
+        auth = request.headers.get("authorization") or ""
+        if not auth.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="upload auth required")
+        token = auth.split(" ", 1)[1].strip()
+        try:
+            current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=401, detail="invalid upload token") from exc
+    redirect = public_or_presigned_url(key)
+    if redirect:
+        return RedirectResponse(redirect, status_code=302)
+    local = (UPLOAD_DIR / key).resolve()
+    if local.is_file():
+        media_type = mimetypes.guess_type(local.name)[0] or "application/octet-stream"
+        return FileResponse(local, media_type=media_type)
+    try:
+        data = read_bytes(key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="upload not found") from None
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"storage read failed: {exc}") from exc
+    media_type = mimetypes.guess_type(key)[0] or "application/octet-stream"
+    return Response(content=data, media_type=media_type)
 
 
 def load_catalog():
@@ -49,7 +119,11 @@ def load_audit():
 def media_items():
     metadata = {item["filename"]: item for item in load_catalog().get("media", [])}
     items = []
+    if not ASSET_DIR.exists():
+        return items
     for index, path in enumerate(sorted(ASSET_DIR.iterdir()), 1):
+        if not path.is_file():
+            continue
         suffix = path.suffix.lower()
         if suffix not in {".mp4", ".pdf"}:
             continue
@@ -85,6 +159,7 @@ def sync_mysql():
     )
     cursor = connection.cursor()
     try:
+      cursor.execute("SET time_zone = '+08:00'")
       for item in load_catalog()["features"]:
         cursor.execute(
             "INSERT INTO features (id,role,title,description,manual_pages,sort_order) VALUES (%s,%s,%s,%s,%s,%s) "
@@ -127,11 +202,19 @@ def mysql_connection():
     if not os.getenv("MYSQL_HOST"):
         return None
     import mysql.connector
-    return mysql.connector.connect(
+    connection = mysql.connector.connect(
         host=os.getenv("MYSQL_HOST"), port=int(os.getenv("MYSQL_PORT", "3306")),
         user=os.getenv("MYSQL_USER", "root"), password=os.getenv("MYSQL_PASSWORD", ""),
         database=os.getenv("MYSQL_DATABASE", "aienglish"), charset="utf8mb4",
     )
+    # 截止时间与催交按东八区计算，避免容器默认 UTC 导致提前关闭
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SET time_zone = '+08:00'")
+        cursor.close()
+    except Exception:
+        pass
+    return connection
 
 
 class ProgressUpdate(BaseModel):
@@ -142,7 +225,8 @@ class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50, pattern="^[A-Za-z0-9_.-]+$")
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=100)
-    role: str = Field(pattern="^(student|teacher|parent)$")
+    # 公开注册仅允许学生/家长；教师与管理员由 admin 创建
+    role: str = Field(default="student", pattern="^(student|parent)$")
 
 
 class AdminUserCreate(BaseModel):
@@ -238,8 +322,16 @@ def startup_sync():
 def health():
     configured = bool(os.getenv("MYSQL_HOST"))
     ready = getattr(app.state, "database_ready", False)
-    return {"status": "ok" if ready or not configured else "degraded", "service": "aienglish", "asset_count": len(media_items()),
-            "database": "connected" if getattr(app.state, "database_ready", False) else "file-fallback"}
+    return {
+        "status": "ok" if ready or not configured else "degraded",
+        "service": "aienglish",
+        "version": "2.6.2",
+        "asset_count": len(media_items()),
+        "database": "connected" if getattr(app.state, "database_ready", False) else "file-fallback",
+        "storage": storage_status(),
+        "notifications": notify_status(),
+        "pronunciation": pronunciation_provider_status(),
+    }
 
 
 @app.get("/api/audit")
@@ -397,6 +489,28 @@ def index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.get("/learn.html")
+def learn_page():
+    return FileResponse(FRONTEND_DIR / "learn.html")
+
+
+@app.get("/learn.js")
+def learn_script():
+    return FileResponse(FRONTEND_DIR / "learn.js", media_type="application/javascript")
+
+
 @app.get("/auth.js")
 def auth_script():
     return FileResponse(FRONTEND_DIR / "auth.js", media_type="application/javascript")
+
+
+app.include_router(register_homework_routes(mysql_connection, current_user))
+app.include_router(register_class_routes(mysql_connection, current_user))
+app.include_router(register_parent_routes(mysql_connection, current_user))
+app.include_router(register_notify_routes(mysql_connection, current_user))
+app.include_router(register_media_progress_routes(mysql_connection, current_user))
+app.include_router(register_lesson_routes(mysql_connection, current_user))
+app.include_router(register_booking_routes(mysql_connection, current_user))
+app.include_router(register_billing_routes(mysql_connection, current_user))
+app.include_router(register_curriculum_routes(mysql_connection, current_user))
+app.include_router(register_analytics_routes(mysql_connection, current_user))

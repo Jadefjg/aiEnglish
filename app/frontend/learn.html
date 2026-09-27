@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>学习工作台 · 领智云英语</title>
+  <script src="/vendor/vue.global.prod.js"></script>
+  <style>
+    :root{--blue:#2457e6;--navy:#15213b;--green:#168669;--line:#e5e9f1;--muted:#667085;--bg:#f6f7fa;--orange:#c56a1a}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--navy);font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif}
+    .shell{max-width:1100px;margin:auto;padding:0 22px}
+    .top{height:66px;background:#fff;border-bottom:1px solid var(--line)}
+    .top .shell{height:100%;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:10px;align-items:center;font-weight:800}
+    .logo{width:34px;height:34px;background:var(--blue);color:#fff;display:grid;place-items:center;border-radius:8px}
+    .top a{color:var(--blue);text-decoration:none;font-size:14px}
+    .hero{background:#17254a;color:#fff;padding:28px 0}
+    .hero h1{margin:0 0 6px;font-size:26px}.hero p{margin:0;color:#cbd4ef;font-size:14px}
+    .tabs{display:flex;gap:8px;margin:22px 0 16px;flex-wrap:wrap}
+    .tabs button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 14px;cursor:pointer;color:var(--muted)}
+    .tabs button.on{background:#eaf0ff;border-color:#b8c8fa;color:var(--blue);font-weight:700}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:18px}
+    .panel h2{margin:0 0 12px;font-size:18px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    label.field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);flex:1;min-width:180px}
+    input,select,textarea{border:1px solid var(--line);border-radius:6px;padding:9px 11px;font:inherit;color:var(--navy)}
+    textarea{min-height:70px;resize:vertical}
+    .btn{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:9px 14px;cursor:pointer;font-size:14px}
+    .btn.secondary{background:#fff;color:var(--blue);border:1px solid #b8c8fa}
+    .btn.green{background:var(--green)}.btn.warn{background:var(--orange)}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .list{display:grid;gap:10px}
+    .item{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+    .item h3{margin:0 0 4px;font-size:16px}.item p{margin:0;color:var(--muted);font-size:13px}
+    .tag{display:inline-block;background:#eaf0ff;color:var(--blue);border-radius:4px;padding:2px 8px;font-size:12px;margin-right:6px}
+    .tag.ok{background:#e8f7f1;color:var(--green)}.tag.warn{background:#fff3e8;color:var(--orange)}.tag.bad{background:#fdecec;color:#b42318}
+    .msg{padding:10px 12px;border-radius:6px;margin-bottom:12px;font-size:13px}
+    .msg.ok{background:#e8f7f1;color:var(--green)}.msg.err{background:#fdecec;color:#b42318}
+    .task{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+    .task h3{margin:0 0 8px}
+    .q{border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0}
+    .opts label{display:block;margin:6px 0;cursor:pointer}
+    .flash{min-height:160px;border:1px dashed #b8c8fa;border-radius:10px;display:grid;place-items:center;padding:24px;text-align:center;cursor:pointer;background:#f8faff}
+    .flash b{font-size:28px;display:block;margin-bottom:8px}
+    .checks{display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:10px}
+    .checks label{font-size:13px;color:var(--navy);display:flex;gap:6px;align-items:center;min-width:140px}
+    video,audio{width:100%;max-width:640px;border-radius:8px;background:#000}
+    .scores{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+    .score{background:#f8faff;border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center}
+    .score b{display:block;font-size:22px;color:var(--blue)}.score span{font-size:12px;color:var(--muted)}
+    .words{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .words span{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px}
+    .words .good{background:#e8f7f1;border-color:#b7e4cf}.words .fair{background:#fff3e8;border-color:#f0c9a0}.words .poor{background:#fdecec;border-color:#f3b4b0}
+    .empty{color:var(--muted);padding:28px;text-align:center}
+    @media(max-width:720px){.item{flex-direction:column;align-items:flex-start}.scores{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<div id="learn-app">
+  <nav class="top"><div class="shell">
+    <div class="brand"><span class="logo">英</span>领智云英语 · 学习工作台</div>
+    <div>
+      <a href="/">← 教程中心</a>
+      <button v-if="user" class="btn secondary" style="margin-left:12px;padding:6px 10px;position:relative" @click="tab='inbox';loadInbox()">
+        消息<span v-if="inboxUnread" style="margin-left:4px;background:#b42318;color:#fff;border-radius:10px;padding:0 6px;font-size:11px">{{inboxUnread}}</span>
+      </button>
+      <span style="margin-left:14px;color:#667085;font-size:13px" v-if="user">{{user.display_name}}（{{user.role}}）</span>
+    </div>
+  </div></nav>
+  <header class="hero"><div class="shell">
+    <h1>班级 · 作业 · AI 纠音</h1>
+    <p>教师管理班级并布置作业；学生完成选择题/视频/背单词/语音，并获得发音评分反馈。</p>
+  </div></header>
+
+  <main class="shell" style="padding:8px 22px 40px">
+    <div v-if="msg" class="msg ok">{{msg}}</div>
+    <div v-if="error" class="msg err">{{error}}</div>
+    <div v-if="pronStatus" class="msg ok" style="background:#eef2ff;color:#3451b2">
+      纠音引擎：{{pronStatus.provider}} — {{pronStatus.note}}
+    </div>
+
+    <div class="tabs" v-if="user">
+      <template v-if="!isParent">
+        <button :class="{on:tab==='assignments'}" @click="tab='assignments'">作业列表</button>
+        <button :class="{on:tab==='classes' || tab==='classDetail'}" @click="tab='classes'">班级管理</button>
+        <button v-if="isTeacher" :class="{on:tab==='create'}" @click="tab='create'">布置作业</button>
+        <button v-if="isTeacher" :class="{on:tab==='dashboard'}" @click="tab='dashboard';loadDashboard()">教培看板</button>
+        <button v-if="isTeacher || isStudent" :class="{on:tab==='ops'}" @click="tab='ops';loadOps()">课时·约课</button>
+        <button v-if="isStudent" :class="{on:tab==='vocab'}" @click="tab='vocab'">自由背单词</button>
+        <button v-if="isStudent" :class="{on:tab==='wrongbook'}" @click="tab='wrongbook';loadWrongbook()">错题本</button>
+        <button v-if="isStudent" :class="{on:tab==='family'}" @click="tab='family'">家长绑定</button>
+        <button :class="{on:tab==='pron'}" @click="tab='pron'">AI 纠音练习</button>
+      </template>
+      <template v-else>
+        <button :class="{on:tab==='parent'}" @click="tab='parent';refreshParent()">子女学情</button>
+        <button :class="{on:tab==='ops'}" @click="tab='ops';loadOps()">课时合同</button>
+        <button :class="{on:tab==='channels'}" @click="tab='channels';loadInbox()">推送渠道</button>
+      </template>
+      <button :class="{on:tab==='inbox'}" @click="tab='inbox';loadInbox()">消息中心</button>
+      <button v-if="tab==='detail' || tab==='childDetail'" class="on">详情</button>
+    </div>
+
+    <!-- 消息中心 -->
+    <section class="panel" v-if="tab==='inbox'">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">消息中心 <span v-if="inboxUnread" class="tag warn">未读 {{inboxUnread}}</span></h2>
+        <button class="btn secondary" @click="markAllRead" :disabled="!inboxUnread">全部已读</button>
+      </div>
+      <p style="font-size:13px;color:#667085">站内信始终可用；配置 Webhook / 微信公众号模板后可外发推送。</p>
+      <div class="list" style="margin-top:12px">
+        <article class="item" v-for="n in inboxItems" :key="n.id" @click="markRead(n)" style="cursor:pointer">
+          <div>
+            <h3>{{n.title}} <span class="tag" v-if="!n.is_read">未读</span></h3>
+            <p>{{n.body}}</p>
+            <p style="margin-top:4px">{{n.created_at}} · {{n.category}} · {{n.channel_status}}</p>
+          </div>
+        </article>
+        <div v-if="!inboxItems.length" class="empty">暂无消息</div>
+      </div>
+    </section>
+
+    <!-- 家长推送渠道 -->
+    <section class="panel" v-if="tab==='channels' && isParent">
+      <h2>推送渠道设置</h2>
+      <p style="font-size:13px;color:#667085">填写微信公众号 openid 后，作业发布/催交/交卷/批改会尝试模板消息推送（需服务端配置 AppId/Secret/模板）。</p>
+      <div class="row">
+        <label class="field">微信 openid<input v-model="channelForm.wechat_openid" placeholder="可选"></label>
+        <label class="field">个人 Webhook URL<input v-model="channelForm.notify_webhook" placeholder="https://..."></label>
+      </div>
+      <button class="btn" @click="saveChannels">保存渠道</button>
+      <p v-if="notifyChannels" style="margin-top:10px;font-size:13px;color:#667085">
+        服务端：站内信 ✓ · Webhook {{notifyChannels.webhook_global?'✓':'—'}} · 微信 OA {{notifyChannels.wechat_oa?'✓':'—'}}
+      </p>
+    </section>
+
+    <!-- 课时 / 排课 / 约课 / 合同 -->
+    <section class="panel" v-if="tab==='ops'">
+      <h2>课时 · 排课 · 口语约课</h2>
+      <div v-if="hourBalance" class="scores" style="margin-bottom:14px">
+        <div class="score"><b>{{hourBalance.remain_hours}}</b><span>剩余课时</span></div>
+        <div class="score"><b>{{hourBalance.total_hours}}</b><span>累计充值</span></div>
+        <div class="score"><b>{{hourBalance.used_hours}}</b><span>已消耗</span></div>
+        <div class="score"><b>{{(contracts||[]).length}}</b><span>合同数</span></div>
+      </div>
+
+      <template v-if="isTeacher">
+        <h3 style="font-size:15px">充值课时</h3>
+        <div class="row">
+          <label class="field">学员
+            <select v-model="hourForm.student_id">
+              <option value="">选择学员</option>
+              <option v-for="s in students" :key="s.id" :value="s.id">{{s.display_name}}</option>
+            </select>
+          </label>
+          <label class="field">课时数<input type="number" min="0.5" step="0.5" v-model.number="hourForm.hours"></label>
+          <label class="field">备注<input v-model="hourForm.note" placeholder="可选"></label>
+          <div style="align-self:end"><button class="btn" @click="purchaseHours">充值</button></div>
+        </div>
+
+        <h3 style="font-size:15px;margin-top:18px">排课</h3>
+        <div class="row">
+          <label class="field">班级
+            <select v-model="lessonForm.class_id">
+              <option v-for="c in classes" :key="c.id" :value="c.id">{{c.name}}</option>
+            </select>
+          </label>
+          <label class="field">标题<input v-model="lessonForm.title" placeholder="Unit 3 口语课"></label>
+          <label class="field">开始时间<input type="datetime-local" v-model="lessonForm.starts_at"></label>
+          <label class="field">扣课时<input type="number" min="0" step="0.5" v-model.number="lessonForm.hours_cost"></label>
+          <div style="align-self:end"><button class="btn green" @click="createLesson">创建课程</button></div>
+        </div>
+        <div class="list" style="margin-top:10px">
+          <article class="item" v-for="l in lessons" :key="l.id" style="flex-direction:column;align-items:stretch">
+            <div class="row" style="justify-content:space-between;margin:0">
+              <div>
+                <h3>{{l.title}}</h3>
+                <p>{{l.class_name}} · {{l.starts_at}} · {{l.status}} · 扣 {{l.hours_cost}} 课时</p>
+              </div>
+              <div class="row" style="margin:0">
+                <button class="btn" v-if="l.status==='scheduled'" @click="markAllPresent(l)">一键出席扣费</button>
+                <button class="btn secondary" v-if="l.status==='scheduled'" @click="cancelLesson(l)">取消并退课时</button>
+              </div>
+            </div>
+          </article>
+          <div v-if="!lessons.length" class="empty">暂无排课</div>
+        </div>
+
+        <h3 style="font-size:15px;margin-top:18px">开放口语时段</h3>
+        <div class="row">
+          <label class="field">开始<input type="datetime-local" v-model="slotForm.starts_at"></label>
+          <label class="field">结束<input type="datetime-local" v-model="slotForm.ends_at"></label>
+          <label class="field">主题<input v-model="slotForm.topic" placeholder="口语陪练"></label>
+          <div style="align-self:end"><button class="btn" @click="createSlot">发布时段</button></div>
+        </div>
+      </template>
+
+      <h3 style="font-size:15px;margin-top:18px">{{isTeacher?'我的口语时段':'可预约口语时段'}}</h3>
+      <div class="list">
+        <article class="item" v-for="s in tutorSlots" :key="s.id">
+          <div>
+            <h3>{{s.starts_at}} ~ {{s.ends_at}}</h3>
+            <p>{{s.topic || '口语 1v1'}} · {{s.status}}
+              <template v-if="s.student_name"> · {{s.student_name}}</template>
+              <template v-if="s.teacher_name && !isTeacher"> · 老师 {{s.teacher_name}}</template>
+            </p>
+          </div>
+          <div class="row" style="margin:0">
+            <button v-if="isStudent && s.status==='open'" class="btn green" @click="bookSlot(s)">预约</button>
+            <button v-if="isStudent && s.booking_id && s.booking_status==='booked'" class="btn secondary" @click="cancelBooking(s.booking_id)">取消预约</button>
+            <button v-if="isTeacher && s.status==='booked'" class="btn" @click="completeBooking(s)">完成并扣课时</button>
+            <button v-if="isTeacher && (s.status==='open'||s.status==='booked')" class="btn secondary" @click="cancelSlot(s)">取消时段</button>
+          </div>
+        </article>
+        <div v-if="!tutorSlots.length" class="empty">暂无时段</div>
+      </div>
+
+      <h3 style="font-size:15px;margin-top:18px">学费合同</h3>
+      <div class="list">
+        <article class="item" v-for="c in contracts" :key="c.id">
+          <div>
+            <h3>{{c.title}}</h3>
+            <p>{{c.student_name || ''}} · {{c.status}} · 已付 {{c.paid_amount}}/{{c.total_amount}} · 已授课时 {{c.hours_granted}}/{{c.hours_included}}</p>
+          </div>
+          <button v-if="isTeacher && c.status!=='cancelled'" class="btn secondary" @click="cancelContract(c)">作废</button>
+        </article>
+        <div v-if="!contracts.length" class="empty">暂无合同</div>
+      </div>
+      <div v-if="isTeacher" class="row" style="margin-top:10px">
+        <label class="field">学员
+          <select v-model="contractForm.student_id">
+            <option value="">选择学员</option>
+            <option v-for="s in students" :key="'c'+s.id" :value="s.id">{{s.display_name}}</option>
+          </select>
+        </label>
+        <label class="field">标题<input v-model="contractForm.title"></label>
+        <label class="field">总额<input type="number" min="0" v-model.number="contractForm.total_amount"></label>
+        <label class="field">含课时<input type="number" min="0" step="0.5" v-model.number="contractForm.hours_included"></label>
+        <label style="align-self:end"><input type="checkbox" v-model="contractForm.activate"> 立即激活并授课时</label>
+        <div style="align-self:end"><button class="btn" @click="createContract">创建合同</button></div>
+      </div>
+    </section>
+
+    <!-- 教培看板 -->
+    <section class="panel" v-if="tab==='dashboard' && isTeacher">
+      <h2>教培看板</h2>
+      <div v-if="!dashboard" class="empty">加载中…</div>
+      <template v-else>
+        <div class="scores">
+          <div class="score"><b>{{dashboard.summary.active_classes}}</b><span>班级</span></div>
+          <div class="score"><b>{{dashboard.summary.published_assignments}}</b><span>进行中作业</span></div>
+          <div class="score"><b>{{dashboard.summary.pending_reviews}}</b><span>待批改</span></div>
+          <div class="score"><b>{{dashboard.summary.unsubmitted_slots}}</b><span>未交人次</span></div>
+        </div>
+        <p style="font-size:13px;color:#667085">低课时学员 {{dashboard.summary.low_hours_students}} · 14天内到期合同 {{dashboard.summary.expiring_contracts}}</p>
+        <div class="list" style="margin-top:12px">
+          <article class="item" v-for="a in (dashboard.recent_assignments || [])" :key="a.id">
+            <div>
+              <h3>{{a.title}}</h3>
+              <p>{{a.class_name || '无班级'}} · 已交 {{a.submitted_count}}/{{a.student_count}} · 完成率 {{a.completion_rate}}% · 均分 {{a.avg_score ?? '-'}}</p>
+            </div>
+            <button class="btn secondary" @click="openAssignment(a)">打开</button>
+          </article>
+        </div>
+      </template>
+    </section>
+
+    <!-- 错题本 -->
+    <section class="panel" v-if="tab==='wrongbook' && isStudent">
+      <h2>错题本</h2>
+      <div class="list">
+        <article class="item" v-for="(w,i) in wrongbook" :key="i" style="flex-direction:column;align-items:stretch">
+          <div>
+            <h3>{{w.assignment_title || ('作业 #'+w.assignment_id)}} · {{w.task_title}}</h3>
+            <p>题型 {{w.task_type}} · 得分 {{w.score}}</p>
+          </div>
+          <div v-for="q in (w.wrong_questions||[])" :key="q.id" class="q" style="margin-top:8px">
+            <div>{{q.stem}}</div>
+            <p style="margin:6px 0 0;font-size:13px;color:#667085">
+              你的作答：{{q.selected || '—'}} · 正确答案：{{q.correct}}
+              <template v-if="q.explanation"> · {{q.explanation}}</template>
+            </p>
+          </div>
+        </article>
+        <div v-if="!wrongbook.length" class="empty">暂无错题记录（交卷后的错题会汇总到这里）</div>
+      </div>
+    </section>
+
+    <!-- 作业列表 -->
+    <section class="panel" v-if="tab==='assignments'">
+      <h2>我的作业</h2>
+      <div v-if="isTeacher" class="row" style="margin-bottom:12px">
+        <label class="field">改期/重开用截止时间<input type="datetime-local" v-model="editDueAt"></label>
+      </div>
+      <div v-if="loading" class="empty">加载中…</div>
+      <div v-else-if="!assignments.length" class="empty">暂无作业。教师可先创建班级并布置。</div>
+      <div class="list" v-else>
+        <article class="item" v-for="item in assignments" :key="item.id">
+          <div>
+            <h3>{{item.title}}</h3>
+            <p>
+              <span class="tag">{{statusLabel(item.status)}}</span>
+              <span class="tag" v-if="item.class_name">班级 {{item.class_name}}</span>
+              <span class="tag warn" v-if="item.urge_count">催交 ×{{item.urge_count}}</span>
+              <span v-if="item.due_at" style="margin-left:4px">截止 {{item.due_at}}</span>
+              <span v-if="isTeacher">学员 {{item.student_count}} · 已交 {{item.submitted_count}}</span>
+              <span v-else>{{statusLabel(item.submission_status)}} <template v-if="item.submission_score!=null">· 得分 {{item.submission_score}}</template></span>
+            </p>
+          </div>
+          <div class="row" style="margin:0">
+            <button v-if="isTeacher && item.status==='draft'" class="btn green" @click="publishAssignment(item)">发布</button>
+            <button v-if="isTeacher && item.status==='published'" class="btn warn" @click="urgeAssignment(item)">催交</button>
+            <button v-if="isTeacher && (item.status==='published' || item.status==='draft')" class="btn secondary" @click="updateAssignmentDue(item)">改期</button>
+            <button v-if="isTeacher && item.status==='published'" class="btn secondary" @click="closeAssignment(item)">关闭</button>
+            <button v-if="isTeacher && item.status==='closed'" class="btn green" @click="reopenAssignment(item)">重开</button>
+            <button class="btn secondary" @click="openAssignment(item)">打开</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 班级管理 -->
+    <section class="panel" v-if="tab==='classes'">
+      <h2>班级管理</h2>
+      <div v-if="isTeacher">
+        <div class="row">
+          <label class="field">班级名称<input v-model="classForm.name" placeholder="例如：三年级一班"></label>
+          <label class="field">说明<input v-model="classForm.description" placeholder="可选"></label>
+        </div>
+        <button class="btn" @click="createClass" style="margin-bottom:16px">创建班级</button>
+      </div>
+      <div v-if="isStudent" class="row" style="margin-bottom:16px">
+        <label class="field">邀请码加入班级<input v-model="joinCode" placeholder="输入教师提供的邀请码"></label>
+        <div style="align-self:end"><button class="btn" @click="joinClass">加入</button></div>
+      </div>
+      <div v-if="!classes.length" class="empty">暂无班级</div>
+      <div class="list" v-else>
+        <article class="item" v-for="c in classes" :key="c.id">
+          <div>
+            <h3>{{c.name}}</h3>
+            <p>
+              <span class="tag">{{statusLabel(c.status)}}</span>
+              教师 {{c.teacher_name}} · 学员 {{c.member_count}}
+              <template v-if="isTeacher"> · 邀请码 <strong>{{c.invite_code}}</strong></template>
+            </p>
+          </div>
+          <button class="btn secondary" @click="openClass(c)">详情</button>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" v-if="tab==='classDetail' && classDetail">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">{{classDetail.name}}</h2>
+        <div class="row" style="margin:0">
+          <button v-if="isTeacher && classDetail.status!=='archived'" class="btn warn" @click="archiveClass(classDetail)">归档班级</button>
+          <button class="btn secondary" @click="tab='classes'">返回</button>
+        </div>
+      </div>
+      <p style="color:#667085">{{classDetail.description || '无说明'}} · {{classDetail.status || 'active'}}</p>
+      <p v-if="isTeacher && classDetail.status!=='archived'">邀请码：<strong>{{classDetail.invite_code}}</strong>
+        <button class="btn secondary" style="margin-left:8px" @click="regenInvite">重置邀请码</button>
+      </p>
+      <h3 style="font-size:15px">学员列表</h3>
+      <div class="list">
+        <article class="item" v-for="m in classDetail.members" :key="m.id">
+          <div><h3>{{m.display_name}}</h3><p>{{m.username}}</p></div>
+          <button v-if="isTeacher" class="btn secondary" @click="removeMember(m.id)">移除</button>
+        </article>
+        <div v-if="!classDetail.members.length" class="empty">暂无学员，可分享邀请码或下方添加。</div>
+      </div>
+      <div v-if="isTeacher" style="margin-top:14px">
+        <h3 style="font-size:15px">添加学员</h3>
+        <div class="checks">
+          <label v-for="s in students" :key="s.id"><input type="checkbox" :value="s.id" v-model="addStudentIds"> {{s.display_name}}</label>
+        </div>
+        <button class="btn" style="margin-top:10px" @click="addMembers">添加所选学员</button>
+      </div>
+    </section>
+
+    <!-- 教师布置 -->
+    <section class="panel" v-if="tab==='create' && isTeacher">
+      <h2>布置作业</h2>
+      <div class="row">
+        <label class="field">标题<input v-model="createForm.title" placeholder="例如：Unit 1 综合练习"></label>
+        <label class="field">截止时间<input type="datetime-local" v-model="createForm.due_at"></label>
+      </div>
+      <label class="field" style="margin-bottom:10px">说明<textarea v-model="createForm.description" placeholder="作业要求（可选）"></textarea></label>
+      <div class="row">
+        <label class="field">布置班级
+          <select v-model="createForm.class_id">
+            <option value="">不按班级（手动选学员）</option>
+            <option v-for="c in classes" :key="c.id" :value="c.id">{{c.name}}（{{c.member_count}}人）</option>
+          </select>
+        </label>
+        <label style="align-self:end"><input type="checkbox" v-model="createForm.publish"> 立即发布</label>
+      </div>
+      <div v-if="!createForm.class_id">
+        <label><input type="checkbox" v-model="createForm.assign_all_students"> 布置给全部学生</label>
+        <div class="checks" v-if="!createForm.assign_all_students" style="margin:10px 0">
+          <label v-for="s in students" :key="s.id"><input type="checkbox" :value="s.id" v-model="createForm.student_ids"> {{s.display_name}}</label>
+        </div>
+      </div>
+
+      <h3 style="margin:18px 0 8px;font-size:15px">题型配置</h3>
+      <label><input type="checkbox" v-model="createForm.includeChoice"> 选择题</label>
+      <div class="checks" v-if="createForm.includeChoice" style="margin:8px 0 14px">
+        <label v-for="q in questions" :key="q.id">
+          <input type="checkbox" :checked="createForm.question_ids.includes(q.id)" @change="toggleId('question_ids', q.id)">
+          #{{q.id}} {{q.stem.slice(0,36)}}…
+        </label>
+      </div>
+
+      <label><input type="checkbox" v-model="createForm.includeVideo"> 看视频</label>
+      <div class="row" v-if="createForm.includeVideo" style="margin:8px 0 14px">
+        <label class="field">视频资源
+          <select v-model="createForm.resource_filename">
+            <option v-for="v in videoResources" :key="v.filename" :value="v.filename">{{v.title}}</option>
+          </select>
+        </label>
+        <label class="field">最少观看秒数<input type="number" min="1" v-model.number="createForm.min_seconds"></label>
+      </div>
+
+      <label><input type="checkbox" v-model="createForm.includeListen"> 听力跟听</label>
+      <div class="row" v-if="createForm.includeListen" style="margin:8px 0 14px">
+        <label class="field">音频/视频资源
+          <select v-model="createForm.listen_filename">
+            <option v-for="v in videoResources" :key="'L'+v.filename" :value="v.filename">{{v.title}}</option>
+          </select>
+        </label>
+      </div>
+
+      <label><input type="checkbox" v-model="createForm.includeVocab"> 背单词</label>
+      <label style="margin-left:12px"><input type="checkbox" v-model="createForm.includeDictation"> 听写（共用下方词表）</label>
+      <div class="checks" v-if="createForm.includeVocab || createForm.includeDictation" style="margin:8px 0 14px">
+        <label v-for="w in words" :key="w.id">
+          <input type="checkbox" :checked="createForm.word_ids.includes(w.id)" @change="toggleId('word_ids', w.id)">
+          {{w.word}} · {{w.meaning}}
+        </label>
+      </div>
+
+      <label><input type="checkbox" v-model="createForm.includeVoice"> AI 纠音朗读</label>
+      <div v-if="createForm.includeVoice" style="margin:8px 0 14px">
+        <label class="field">朗读文本<textarea v-model="createForm.voice_prompt"></textarea></label>
+        <label class="field" style="max-width:180px;margin-top:8px">及格分<input type="number" min="1" max="100" v-model.number="createForm.pass_score"></label>
+      </div>
+
+      <button class="btn" @click="createAssignment">创建并布置</button>
+    </section>
+
+    <!-- 学生：家长绑定 -->
+    <section class="panel" v-if="tab==='family' && isStudent">
+      <h2>家长绑定</h2>
+      <p style="color:#667085;font-size:14px">把邀请码发给家长，家长登录后即可查看你的作业与纠音学情。</p>
+      <p>我的家长邀请码：<strong style="font-size:22px;letter-spacing:2px">{{parentInvite || '加载中…'}}</strong>
+        <button class="btn secondary" style="margin-left:8px" @click="rotateParentInvite">重置邀请码</button>
+      </p>
+      <h3 style="font-size:15px">已绑定家长</h3>
+      <div class="list">
+        <article class="item" v-for="p in linkedParents" :key="p.id">
+          <div><h3>{{p.display_name}}</h3><p>{{p.username}}</p></div>
+          <button class="btn secondary" @click="revokeParent(p.id)">解除</button>
+        </article>
+        <div v-if="!linkedParents.length" class="empty">暂无家长绑定</div>
+      </div>
+    </section>
+
+    <!-- 家长：子女学情 -->
+    <section class="panel" v-if="tab==='parent' && isParent">
+      <h2>子女学情</h2>
+      <div class="row">
+        <label class="field">用学生邀请码绑定<input v-model="bindCode" placeholder="输入学生提供的邀请码"></label>
+        <div style="align-self:end"><button class="btn" @click="bindChild">绑定</button></div>
+      </div>
+      <div class="list" style="margin-top:14px">
+        <article class="item" v-for="c in children" :key="c.id">
+          <div>
+            <h3>{{c.display_name}}</h3>
+            <p>作业 {{c.assignment_count}} · 已交 {{c.submitted_count}}</p>
+          </div>
+          <div class="row" style="margin:0">
+            <button class="btn secondary" @click="openChild(c)">查看学情</button>
+            <button class="btn" style="background:#b42318" @click="unbindChild(c.id)">解绑</button>
+          </div>
+        </article>
+        <div v-if="!children.length" class="empty">尚未绑定子女，请向学生索取邀请码。</div>
+      </div>
+    </section>
+
+    <section class="panel" v-if="tab==='childDetail' && childOverview">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">{{childOverview.student.display_name}} 的学情</h2>
+        <button class="btn secondary" @click="tab='parent'">返回</button>
+      </div>
+      <div class="scores">
+        <div class="score"><b>{{childOverview.summary.assignment_total}}</b><span>作业数</span></div>
+        <div class="score"><b>{{childOverview.summary.submitted}}</b><span>已提交</span></div>
+        <div class="score"><b>{{childOverview.summary.avg_score ?? '-'}}</b><span>平均分</span></div>
+        <div class="score"><b>{{childOverview.summary.vocab_mastered}}</b><span>已掌握单词</span></div>
+      </div>
+      <h3 style="font-size:15px">作业</h3>
+      <div class="list">
+        <article class="item" v-for="a in childOverview.assignments" :key="a.id">
+          <div>
+            <h3>{{a.title}}</h3>
+            <p>
+              <span class="tag">{{statusLabel(a.status)}}</span>
+              {{statusLabel(a.submission_status)}}
+              <template v-if="a.score!=null"> · {{a.score}} 分</template>
+              <template v-if="a.teacher_comment"> · 评语：{{a.teacher_comment}}</template>
+            </p>
+          </div>
+        </article>
+      </div>
+      <h3 style="font-size:15px;margin-top:16px">最近纠音</h3>
+      <div class="list">
+        <article class="item" v-for="p in childOverview.pronunciation" :key="p.id">
+          <div>
+            <h3>{{p.overall_score}} 分 · {{p.provider}}</h3>
+            <p>{{p.reference_text}}</p>
+          </div>
+        </article>
+        <div v-if="!childOverview.pronunciation.length" class="empty">暂无纠音记录</div>
+      </div>
+    </section>
+
+    <!-- 自由背单词 -->
+    <section class="panel" v-if="tab==='vocab' && isStudent">
+      <h2>自由背单词</h2>
+      <div v-if="!currentWord" class="empty">词库为空</div>
+      <div v-else>
+        <div class="flash" @click="flipped=!flipped">
+          <div>
+            <b>{{currentWord.word}}</b>
+            <div style="color:#667085">{{currentWord.phonetic || ''}}</div>
+            <div v-if="flipped" style="margin-top:12px">
+              <div>{{currentWord.meaning}}</div>
+              <div style="margin-top:8px;color:#667085">{{currentWord.example_sentence}}</div>
+            </div>
+            <div v-else style="margin-top:12px;color:#98a2b3">点击卡片查看释义</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn green" @click="practiceKnow">认识了</button>
+          <button class="btn secondary" @click="practiceNext">下一个</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI 纠音练习 -->
+    <section class="panel" v-if="tab==='pron'">
+      <h2>AI 纠音练习</h2>
+      <label class="field">朗读参考文本<textarea v-model="practiceText"></textarea></label>
+      <p style="font-size:13px;color:#667085">引擎阶梯：Azure 音素 → 自建 Whisper → 浏览器 ASR 词级 → 本地启发式。录音时会尽量启用浏览器英文识别作为回退。</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn warn" v-if="!recording || recordTarget!=='practice'" @click="startRecord('practice')" :disabled="recording">开始录音</button>
+        <button class="btn" v-else @click="stopRecord(null)">停止并评分（{{recordSeconds}}s）</button>
+      </div>
+      <p v-if="recording && recordTarget==='practice'" style="color:#3451b2;font-size:13px">识别中：{{liveTranscript || '…'}}</p>
+      <div v-if="pronResult" style="margin-top:16px">
+        <div class="scores">
+          <div class="score"><b>{{pronResult.overall_score}}</b><span>总分</span></div>
+          <div class="score"><b>{{pronResult.accuracy_score ?? '-'}}</b><span>准确度</span></div>
+          <div class="score"><b>{{pronResult.fluency_score ?? '-'}}</b><span>流利度</span></div>
+          <div class="score"><b>{{pronResult.completeness_score ?? '-'}}</b><span>完整度</span></div>
+        </div>
+        <p style="color:#667085;font-size:13px">{{pronResult.tips}} · 引擎 {{pronResult.provider}}</p>
+        <div class="words">
+          <span v-for="w in (pronResult.words||[])" :key="w.word + w.accuracy_score"
+            :class="(w.accuracy_score||0)>=75?'good':(w.accuracy_score||0)>=60?'fair':'poor'"
+            :title="w.tip">{{w.word}} {{w.accuracy_score}}</span>
+        </div>
+      </div>
+      <h3 style="font-size:15px;margin-top:20px" v-if="pronHistory.length">最近练习</h3>
+      <div class="list">
+        <article class="item" v-for="h in pronHistory" :key="h.id">
+          <div>
+            <h3>{{h.overall_score}} 分 · {{h.provider}}</h3>
+            <p>{{h.reference_text}}</p>
+          </div>
+          <audio v-if="h.audio_url" :src="h.audio_url" controls style="max-width:240px;background:transparent"></audio>
+        </article>
+      </div>
+    </section>
+
+    <!-- 作业详情 -->
+    <section class="panel" v-if="tab==='detail' && selected">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">{{selected.title}}</h2>
+        <button class="btn secondary" @click="tab='assignments';selected=null">返回列表</button>
+      </div>
+      <p style="color:#667085">
+        <span class="tag" v-if="selected.class_name">班级 {{selected.class_name}}</span>
+        <span class="tag" v-if="selected.status==='closed'">已截止关闭</span>
+        <span class="tag warn" v-if="selected.urge_count">老师已催交 ×{{selected.urge_count}}</span>
+        <span v-if="selected.due_at">截止 {{selected.due_at}}</span>
+        {{selected.description || '无额外说明'}}
+      </p>
+      <div v-if="selected.accepting_answers===false" class="msg err">作业已关闭，仅可查看，不可再作答。</div>
+
+      <div v-if="isTeacher">
+        <h3 style="font-size:15px">学员完成情况</h3>
+        <div class="list">
+          <article class="item" v-for="s in (selected.students||[])" :key="s.id">
+            <div>
+              <h3>{{s.display_name}}</h3>
+              <p>{{statusLabel(s.submission_status)}} <template v-if="s.score!=null">· {{s.score}} 分</template></p>
+            </div>
+          </article>
+        </div>
+        <div v-if="submissions.length" style="margin-top:16px">
+          <h3 style="font-size:15px">提交明细 / 纠音结果 / 批改</h3>
+          <article class="item" v-for="sub in submissions" :key="sub.id" style="flex-direction:column;align-items:stretch">
+            <div><strong>{{sub.display_name}}</strong> · {{statusLabel(sub.status)}} · {{sub.score}} 分</div>
+            <div v-for="a in sub.answers" :key="a.task_id" style="font-size:13px;color:#667085;margin-top:8px">
+              任务 #{{a.task_id}} · 得分 {{a.score}}
+              <template v-if="a.answer && a.answer.assessment">
+                · 准确 {{a.answer.assessment.accuracy_score}} / 流利 {{a.answer.assessment.fluency_score}}
+              </template>
+              <audio v-if="a.answer && a.answer.audio_url" :src="a.answer.audio_url" controls style="margin-top:6px;background:transparent"></audio>
+            </div>
+            <div class="row" style="margin-top:10px" v-if="(sub.status==='submitted' || sub.status==='reviewed') && reviewForms[sub.id]">
+              <label class="field" style="max-width:120px">评分
+                <input type="number" min="0" max="100" v-model.number="reviewForms[sub.id].score">
+              </label>
+              <label class="field">评语
+                <input v-model="reviewForms[sub.id].teacher_comment" placeholder="可选评语">
+              </label>
+              <div style="align-self:end"><button class="btn" @click="reviewSubmission(sub)">保存批改</button></div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div v-if="isStudent || (!isTeacher && selected.tasks)">
+        <div class="task" v-for="task in selected.tasks" :key="task.id">
+          <h3>
+            <span class="tag">{{ {choice:'选择题',video:'看视频',listen:'听力',vocab:'背单词',dictation:'听写',voice:'AI纠音'}[task.task_type] || task.task_type }}</span>
+            {{task.title}}
+            <span class="tag ok" v-if="taskAnswer(task.id) && taskAnswer(task.id).score >= (task.config.pass_score||60)">已达标 {{taskAnswer(task.id).score}}</span>
+            <span class="tag warn" v-else-if="taskAnswer(task.id)">得分 {{taskAnswer(task.id).score}}</span>
+          </h3>
+
+          <div v-if="task.task_type==='choice'">
+            <div class="q" v-for="q in task.questions" :key="q.id">
+              <div><strong>{{q.stem}}</strong></div>
+              <div class="opts">
+                <label v-for="opt in ['A','B','C','D']" :key="opt">
+                  <input type="radio" :name="'q'+q.id" :value="opt" v-model="choiceAnswers[q.id]"
+                    :disabled="!canEditAssignment">
+                  {{opt}}. {{q['option_'+opt.toLowerCase()]}}
+                  <span v-if="!canEditAssignment && q.answer===opt" style="color:#168669">（正确）</span>
+                </label>
+              </div>
+              <p v-if="q.answer" style="margin:8px 0 0;font-size:13px;color:#168669">
+                正确答案：{{q.answer}}
+                <template v-if="q.explanation"> · {{q.explanation}}</template>
+              </p>
+            </div>
+            <button class="btn" @click="saveChoice(task)" :disabled="!canEditAssignment">提交选择题</button>
+          </div>
+
+          <div v-if="task.task_type==='video' || task.task_type==='listen'">
+            <p style="font-size:13px;color:#667085">需有效观看至少 {{task.config.min_seconds||0}} 秒（服务端心跳校验，当前 {{videoWatched}}s）</p>
+            <video v-if="task.task_type==='video' && task.video_url" :src="task.video_url" controls
+              @play="ensureMediaSession(task)" @timeupdate="onMediaTime($event, task)"></video>
+            <audio v-if="task.task_type==='listen' && (task.audio_url || task.video_url)"
+              :src="task.audio_url || task.video_url" controls
+              @play="ensureMediaSession(task)" @timeupdate="onMediaTime($event, task)"
+              style="background:transparent"></audio>
+            <div style="margin-top:10px">
+              <button class="btn" @click="saveMediaTask(task)" :disabled="!canEditAssignment">提交进度</button>
+            </div>
+          </div>
+
+          <div v-if="task.task_type==='dictation'">
+            <p style="font-size:13px;color:#667085">根据释义/音标听写单词（用空格分隔）</p>
+            <div class="list" v-if="task.prompt_words">
+              <article class="item" v-for="w in task.prompt_words" :key="w.id">
+                <div><h3>{{w.hint || '（无释义）'}}</h3><p>{{w.phonetic || ''}}</p></div>
+              </article>
+            </div>
+            <div class="list" v-else-if="task.words">
+              <article class="item" v-for="w in task.words" :key="w.id">
+                <div><h3>{{w.meaning}}</h3><p>{{w.phonetic || ''}}</p></div>
+              </article>
+            </div>
+            <label class="field" style="margin-top:10px">听写内容<textarea v-model="dictationText[task.id]" placeholder="apple banana ..."></textarea></label>
+            <button class="btn" style="margin-top:10px" @click="saveDictation(task)" :disabled="!canEditAssignment">提交听写</button>
+          </div>
+
+          <div v-if="task.task_type==='vocab'">
+            <div class="list">
+              <article class="item" v-for="w in task.words" :key="w.id">
+                <div>
+                  <h3>{{w.word}} <small style="color:#667085">{{w.phonetic}}</small></h3>
+                  <p>{{w.meaning}} · {{w.example_sentence}}</p>
+                </div>
+                <button class="btn green" @click="markWord(task, w.id)"
+                  :disabled="!canEditAssignment || (taskAnswer(task.id)&&taskAnswer(task.id).answer&&(taskAnswer(task.id).answer.learned_word_ids||[]).includes(w.id))">
+                  已背会
+                </button>
+              </article>
+            </div>
+          </div>
+
+          <div v-if="task.task_type==='voice'">
+            <p><strong>朗读内容：</strong>{{task.config.prompt}}</p>
+            <p style="font-size:13px;color:#667085">及格分 {{task.config.pass_score || 60}}</p>
+            <audio v-if="taskAnswer(task.id) && taskAnswer(task.id).answer && taskAnswer(task.id).answer.audio_url"
+              :src="taskAnswer(task.id).answer.audio_url" controls style="margin:10px 0;background:transparent"></audio>
+            <div v-if="assessmentOf(task.id)" class="scores">
+              <div class="score"><b>{{assessmentOf(task.id).overall_score}}</b><span>总分</span></div>
+              <div class="score"><b>{{assessmentOf(task.id).accuracy_score ?? '-'}}</b><span>准确度</span></div>
+              <div class="score"><b>{{assessmentOf(task.id).fluency_score ?? '-'}}</b><span>流利度</span></div>
+              <div class="score"><b>{{assessmentOf(task.id).completeness_score ?? '-'}}</b><span>完整度</span></div>
+            </div>
+            <div class="words" v-if="assessmentOf(task.id) && assessmentOf(task.id).words">
+              <span v-for="w in assessmentOf(task.id).words" :key="w.word + w.accuracy_score"
+                :class="(w.accuracy_score||0)>=75?'good':(w.accuracy_score||0)>=60?'fair':'poor'"
+                :title="w.tip">{{w.word}} {{w.accuracy_score}}</span>
+            </div>
+            <p v-if="assessmentOf(task.id)" style="color:#667085;font-size:13px">{{assessmentOf(task.id).tips}}</p>
+            <p v-if="recording && recordTarget==='task'" style="color:#3451b2;font-size:13px">识别中：{{liveTranscript || '…'}}</p>
+            <div class="row">
+              <button class="btn warn" v-if="!recording || recordTarget!=='task'" @click="startRecord('task')"
+                :disabled="!canEditAssignment || recording">开始录音纠音</button>
+              <button class="btn" v-else-if="recording && recordTarget==='task'" @click="stopRecord(task)">停止并评分（{{recordSeconds}}s）</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px" v-if="isStudent">
+          <button class="btn green" @click="finalize" :disabled="!canEditAssignment">整份作业交卷</button>
+          <span v-if="selected.submission && selected.submission.status!=='in_progress'" style="margin-left:10px;color:#168669">
+            {{statusLabel(selected.submission.status)}}，得分 {{selected.submission.score}}
+            <template v-if="selected.submission.teacher_comment"> · 老师评语：{{selected.submission.teacher_comment}}</template>
+          </span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/learn.js"></script>
+<script src="/auth.js"></script>
+</body>
+</html>

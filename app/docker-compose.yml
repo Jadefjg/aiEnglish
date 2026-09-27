@@ -1,9 +1,11 @@
 services:
   mysql:
     image: mysql:8.4
+    command: ["mysqld", "--default-time-zone=+08:00", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     environment:
       MYSQL_DATABASE: aienglish
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
+      TZ: Asia/Shanghai
     volumes: ["mysql_data:/var/lib/mysql", "./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro"]
     restart: unless-stopped
     healthcheck:
@@ -16,10 +18,11 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     working_dir: /srv
-    volumes: ["./backend:/srv/backend", "./requirements.txt:/srv/requirements.txt", "../asset:/srv/asset"]
+    volumes: ["./backend:/srv/backend", "./requirements.txt:/srv/requirements.txt", "../asset:/srv/asset", "./uploads:/srv/app/uploads"]
     expose: ["8000"]
     environment:
       ASSET_DIR: /srv/asset
+      UPLOAD_DIR: /srv/app/uploads
       MYSQL_HOST: mysql
       MYSQL_DATABASE: aienglish
       MYSQL_USER: root
@@ -28,6 +31,26 @@ services:
       ENVIRONMENT: production
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastasia}
+      AZURE_SPEECH_LANGUAGE: ${AZURE_SPEECH_LANGUAGE:-en-US}
+      PRONUNCIATION_PROVIDER: ${PRONUNCIATION_PROVIDER:-auto}
+      WHISPER_ASR_URL: ${WHISPER_ASR_URL:-}
+      WHISPER_ASR_TOKEN: ${WHISPER_ASR_TOKEN:-}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
+      S3_PRESIGN: ${S3_PRESIGN:-1}
+      NOTIFY_WEBHOOK_URL: ${NOTIFY_WEBHOOK_URL:-}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      WECHAT_TEMPLATE_ID: ${WECHAT_TEMPLATE_ID:-}
+      WECHAT_DEFAULT_URL: ${WECHAT_DEFAULT_URL:-}
+      WECHAT_TEMPLATE_DATA_JSON: ${WECHAT_TEMPLATE_DATA_JSON:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -39,7 +62,16 @@ services:
     environment:
       MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}
     entrypoint: ["sh", "-c"]
-    command: ["until mysql -h mysql -uroot -e 'SELECT 1' aienglish; do sleep 2; done; for f in /migrations/*.sql; do mysql -h mysql -uroot aienglish < \"$$f\"; done"]
+    command:
+      - |
+        until mysql -h mysql -uroot -e 'SELECT 1' aienglish; do sleep 2; done;
+        for f in /migrations/*.sql; do
+          v=$$(basename "$$f" .sql);
+          applied=$$(mysql -h mysql -uroot -N -e "SELECT COUNT(*) FROM schema_migrations WHERE version='$$v'" aienglish 2>/dev/null || echo 0);
+          if [ "$$applied" = "1" ]; then echo "skip $$v"; continue; fi;
+          echo "apply $$v";
+          mysql -h mysql -uroot aienglish < "$$f" || exit 1;
+        done
     depends_on:
       mysql:
         condition: service_healthy
