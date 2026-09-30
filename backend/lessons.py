@@ -78,7 +78,7 @@ class LessonUpdate(BaseModel):
     starts_at: datetime | None = None
     duration_minutes: int | None = Field(default=None, ge=15, le=480)
     hours_cost: float | None = Field(default=None, ge=0, le=50)
-    status: str | None = Field(default=None, pattern="^(scheduled|completed|cancelled)$")
+    status: str | None = Field(default=None, pattern="^(scheduled|cancelled)$")
 
 
 class AttendanceItem(BaseModel):
@@ -204,14 +204,21 @@ def register_lesson_routes(mysql_connection, current_user):
         require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id,teacher_id FROM lessons WHERE id=%s", (lesson_id,))
+        try:
+            cursor.execute("START TRANSACTION")
+        except Exception:
+            pass
+        cursor.execute("SELECT id,teacher_id,status FROM lessons WHERE id=%s FOR UPDATE", (lesson_id,))
         item = cursor.fetchone()
         if not item:
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="lesson not found")
         if user["role"] != "admin" and item["teacher_id"] != int(user["sub"]):
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=403, detail="not your lesson")
+        if item["status"] == "cancelled" and payload.status == "cancelled":
+            connection.rollback(); cursor.close(); connection.close()
+            return {"id": lesson_id, "updated": True, "hours_refunded_students": 0, "already": True}
         fields, values = [], []
         if payload.title is not None:
             fields.append("title=%s"); values.append(payload.title.strip())
@@ -227,16 +234,22 @@ def register_lesson_routes(mysql_connection, current_user):
         if payload.hours_cost is not None:
             fields.append("hours_cost=%s"); values.append(payload.hours_cost)
         if payload.status is not None:
+            if payload.status == "completed":
+                connection.rollback(); cursor.close(); connection.close()
+                raise HTTPException(
+                    status_code=400,
+                    detail="mark completed via attendance endpoint to deduct hours",
+                )
             fields.append("status=%s"); values.append(payload.status)
         if not fields:
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="no fields")
         refunded = 0
         if payload.status == "cancelled":
-            # 取消已点名课程：冲正出席扣减
+            # 持有 lesson 行锁后再读 attendance，避免点名并发导致已扣不退
             cursor.execute(
                 "SELECT student_id,hours_deducted FROM lesson_attendance "
-                "WHERE lesson_id=%s AND hours_deducted>0",
+                "WHERE lesson_id=%s AND hours_deducted>0 FOR UPDATE",
                 (lesson_id,),
             )
             for row in cursor.fetchall():

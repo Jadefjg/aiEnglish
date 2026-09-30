@@ -78,6 +78,7 @@ def register_curriculum_routes(mysql_connection, current_user):
 
     @router.get("/api/textbooks")
     def list_textbooks(user=Depends(current_user)):
+        require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
@@ -113,6 +114,7 @@ def register_curriculum_routes(mysql_connection, current_user):
 
     @router.get("/api/textbooks/{textbook_id}/chapters")
     def list_chapters(textbook_id: int, user=Depends(current_user)):
+        require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT id,title,level FROM textbooks WHERE id=%s", (textbook_id,))

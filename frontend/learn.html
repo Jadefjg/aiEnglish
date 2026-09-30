@@ -84,6 +84,7 @@
         <button :class="{on:tab==='classes' || tab==='classDetail'}" @click="tab='classes'">班级管理</button>
         <button v-if="isTeacher" :class="{on:tab==='create'}" @click="tab='create'">布置作业</button>
         <button v-if="isTeacher" :class="{on:tab==='dashboard'}" @click="tab='dashboard';loadDashboard()">教培看板</button>
+        <button v-if="isTeacher" :class="{on:tab==='curriculum'}" @click="tab='curriculum';loadCurriculum()">教材章节</button>
         <button v-if="isTeacher || isStudent" :class="{on:tab==='ops'}" @click="tab='ops';loadOps()">课时·约课</button>
         <button v-if="isStudent" :class="{on:tab==='vocab'}" @click="tab='vocab'">自由背单词</button>
         <button v-if="isStudent" :class="{on:tab==='wrongbook'}" @click="tab='wrongbook';loadWrongbook()">错题本</button>
@@ -146,7 +147,7 @@
         <h3 style="font-size:15px">充值课时</h3>
         <div class="row">
           <label class="field">学员
-            <select v-model="hourForm.student_id">
+            <select v-model="hourForm.student_id" @change="onHourStudentChange">
               <option value="">选择学员</option>
               <option v-for="s in students" :key="s.id" :value="s.id">{{s.display_name}}</option>
             </select>
@@ -220,7 +221,10 @@
             <h3>{{c.title}}</h3>
             <p>{{c.student_name || ''}} · {{c.status}} · 已付 {{c.paid_amount}}/{{c.total_amount}} · 已授课时 {{c.hours_granted}}/{{c.hours_included}}</p>
           </div>
-          <button v-if="isTeacher && c.status!=='cancelled'" class="btn secondary" @click="cancelContract(c)">作废</button>
+          <div class="row" style="margin:0">
+            <button v-if="isTeacher && c.status!=='cancelled' && c.status!=='completed'" class="btn" @click="pickContractForPay(c)">登记缴费</button>
+            <button v-if="isTeacher && c.status!=='cancelled'" class="btn secondary" @click="cancelContract(c)">作废</button>
+          </div>
         </article>
         <div v-if="!contracts.length" class="empty">暂无合同</div>
       </div>
@@ -236,6 +240,29 @@
         <label class="field">含课时<input type="number" min="0" step="0.5" v-model.number="contractForm.hours_included"></label>
         <label style="align-self:end"><input type="checkbox" v-model="contractForm.activate"> 立即激活并授课时</label>
         <div style="align-self:end"><button class="btn" @click="createContract">创建合同</button></div>
+      </div>
+      <div v-if="isTeacher" class="row" style="margin-top:12px">
+        <label class="field">缴费合同
+          <select v-model="paymentForm.contract_id">
+            <option value="">选择合同</option>
+            <option v-for="c in contracts.filter(x => x.status!=='cancelled')" :key="'p'+c.id" :value="c.id">
+              #{{c.id}} {{c.title}}（欠 {{Math.max(0,(c.total_amount||0)-(c.paid_amount||0))}）
+            </option>
+          </select>
+        </label>
+        <label class="field">到账金额<input type="number" min="0" step="0.01" v-model.number="paymentForm.amount"></label>
+        <label class="field">入账课时<input type="number" min="0" step="0.5" v-model.number="paymentForm.hours_granted" placeholder="0=按比例"></label>
+        <label class="field">方式
+          <select v-model="paymentForm.method">
+            <option value="transfer">转账</option>
+            <option value="cash">现金</option>
+            <option value="wechat">微信</option>
+            <option value="alipay">支付宝</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <label class="field">备注<input v-model="paymentForm.note" placeholder="可选"></label>
+        <div style="align-self:end"><button class="btn green" @click="recordPayment">确认到账</button></div>
       </div>
     </section>
 
@@ -261,6 +288,91 @@
           </article>
         </div>
       </template>
+    </section>
+
+    <!-- 教材 / 章节（闭合 curriculum API） -->
+    <section class="panel" v-if="tab==='curriculum' && isTeacher">
+      <h2>教材与章节</h2>
+      <p style="font-size:13px;color:#667085">创建教材 → 添加章节内容包 → 绑定班级 → 一键布置章节作业。</p>
+      <div class="row">
+        <label class="field">教材名称<input v-model="textbookForm.title" placeholder="例如：新概念 1"></label>
+        <label class="field">级别<input v-model="textbookForm.level" placeholder="A1 / 小学"></label>
+        <label class="field">说明<input v-model="textbookForm.description" placeholder="可选"></label>
+        <div style="align-self:end"><button class="btn" @click="createTextbook">创建教材</button></div>
+      </div>
+      <div class="list" style="margin-top:12px">
+        <article class="item" v-for="b in textbooks" :key="b.id">
+          <div>
+            <h3>{{b.title}}</h3>
+            <p>{{b.level || '未分级'}} · {{b.chapter_count || 0}} 章 · {{b.description || ''}}</p>
+          </div>
+          <button class="btn secondary" @click="openTextbook(b)">管理章节</button>
+        </article>
+        <div v-if="!textbooks.length" class="empty">暂无教材，先创建一个。</div>
+      </div>
+
+      <template v-if="selectedTextbook">
+        <h3 style="font-size:15px;margin-top:18px">章节 · {{selectedTextbook.title}}</h3>
+        <div class="row">
+          <label class="field">章节标题<input v-model="chapterForm.title" placeholder="Unit 1 Greetings"></label>
+          <label class="field">目标<input v-model="chapterForm.objectives" placeholder="可选"></label>
+        </div>
+        <p style="font-size:13px;color:#667085;margin:8px 0">勾选本章词/题/视频（与布置作业词库同源）</p>
+        <div class="checks">
+          <label v-for="w in words" :key="'cw'+w.id"><input type="checkbox" :value="w.id" v-model="chapterForm.word_ids"> {{w.word}}</label>
+        </div>
+        <div class="checks" style="margin-top:8px">
+          <label v-for="q in questions" :key="'cq'+q.id"><input type="checkbox" :value="q.id" v-model="chapterForm.question_ids"> Q{{q.id}}</label>
+        </div>
+        <div class="checks" style="margin-top:8px">
+          <label v-for="r in videoResources" :key="'cr'+r.filename">
+            <input type="checkbox" :value="r.filename" v-model="chapterForm.resource_filenames"> {{r.filename}}
+          </label>
+        </div>
+        <button class="btn green" style="margin-top:10px" @click="createChapter">添加章节</button>
+        <div class="list" style="margin-top:12px">
+          <article class="item" v-for="ch in chapters" :key="ch.id">
+            <div>
+              <h3>#{{ch.id}} {{ch.title}}</h3>
+              <p>{{ch.objectives || '无目标'}}</p>
+            </div>
+            <button class="btn secondary" @click="assignChapterForm.chapter_id=ch.id; msg='已选章节 #'+ch.id">选用</button>
+          </article>
+          <div v-if="!chapters.length" class="empty">该教材暂无章节</div>
+        </div>
+      </template>
+
+      <h3 style="font-size:15px;margin-top:18px">绑定班级 / 章节布置</h3>
+      <div class="row">
+        <label class="field">班级
+          <select v-model="bindBookForm.class_id">
+            <option v-for="c in classes" :key="'bc'+c.id" :value="c.id">{{c.name}}</option>
+          </select>
+        </label>
+        <label class="field">教材
+          <select v-model="bindBookForm.textbook_id">
+            <option v-for="b in textbooks" :key="'bt'+b.id" :value="b.id">{{b.title}}</option>
+          </select>
+        </label>
+        <div style="align-self:end"><button class="btn" @click="bindTextbook">绑定教材</button></div>
+      </div>
+      <div class="row">
+        <label class="field">章节 ID<input type="number" v-model.number="assignChapterForm.chapter_id" placeholder="从上表选用"></label>
+        <label class="field">布置到班级
+          <select v-model="assignChapterForm.class_id">
+            <option value="">仅草稿</option>
+            <option v-for="c in classes" :key="'ac'+c.id" :value="c.id">{{c.name}}</option>
+          </select>
+        </label>
+        <label class="field">截止天数<input type="number" min="1" v-model.number="assignChapterForm.due_days"></label>
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" v-model="assignChapterForm.include_dictation"> 含听写
+        </label>
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" v-model="assignChapterForm.include_voice"> 含纠音
+        </label>
+        <div style="align-self:end"><button class="btn green" @click="assignChapterHomework">生成作业</button></div>
+      </div>
     </section>
 
     <!-- 错题本 -->
@@ -289,6 +401,9 @@
       <h2>我的作业</h2>
       <div v-if="isTeacher" class="row" style="margin-bottom:12px">
         <label class="field">改期/重开用截止时间<input type="datetime-local" v-model="editDueAt"></label>
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px;min-width:auto">
+          <input type="checkbox" v-model="reopenResetSubmitted"> 重开时打回已交卷（未批改）
+        </label>
       </div>
       <div v-if="loading" class="empty">加载中…</div>
       <div v-else-if="!assignments.length" class="empty">暂无作业。教师可先创建班级并布置。</div>
@@ -401,6 +516,26 @@
       </div>
 
       <h3 style="margin:18px 0 8px;font-size:15px">题型配置</h3>
+      <div class="panel" style="background:#f8faff;margin:8px 0 14px;padding:12px">
+        <p style="margin:0 0 8px;font-size:13px;color:#667085">词库/题库为空时可在此快速新增</p>
+        <div class="row">
+          <label class="field">单词<input v-model="quickWord.word" placeholder="apple"></label>
+          <label class="field">释义<input v-model="quickWord.meaning" placeholder="苹果"></label>
+          <label class="field">音标<input v-model="quickWord.phonetic" placeholder="可选"></label>
+          <div style="align-self:end"><button class="btn secondary" type="button" @click="createWordQuick">添加单词</button></div>
+        </div>
+        <div class="row">
+          <label class="field">题干<input v-model="quickQuestion.stem" placeholder="What is …?"></label>
+          <label class="field">A<input v-model="quickQuestion.option_a"></label>
+          <label class="field">B<input v-model="quickQuestion.option_b"></label>
+          <label class="field">C<input v-model="quickQuestion.option_c"></label>
+          <label class="field">D<input v-model="quickQuestion.option_d"></label>
+          <label class="field">答案
+            <select v-model="quickQuestion.answer"><option>A</option><option>B</option><option>C</option><option>D</option></select>
+          </label>
+          <div style="align-self:end"><button class="btn secondary" type="button" @click="createQuestionQuick">添加题目</button></div>
+        </div>
+      </div>
       <label><input type="checkbox" v-model="createForm.includeChoice"> 选择题</label>
       <div class="checks" v-if="createForm.includeChoice" style="margin:8px 0 14px">
         <label v-for="q in questions" :key="q.id">
@@ -635,8 +770,9 @@
           <h3>
             <span class="tag">{{ {choice:'选择题',video:'看视频',listen:'听力',vocab:'背单词',dictation:'听写',voice:'AI纠音'}[task.task_type] || task.task_type }}</span>
             {{task.title}}
-            <span class="tag ok" v-if="taskAnswer(task.id) && taskAnswer(task.id).score >= (task.config.pass_score||60)">已达标 {{taskAnswer(task.id).score}}</span>
-            <span class="tag warn" v-else-if="taskAnswer(task.id)">得分 {{taskAnswer(task.id).score}}</span>
+            <span class="tag ok" v-if="taskAnswer(task.id) && taskAnswer(task.id).score != null && taskAnswer(task.id).score >= (task.config.pass_score||60)">已达标 {{taskAnswer(task.id).score}}</span>
+            <span class="tag warn" v-else-if="taskAnswer(task.id) && taskAnswer(task.id).score != null">得分 {{taskAnswer(task.id).score}}</span>
+            <span class="tag" v-else-if="taskAnswer(task.id)">已保存，待交卷</span>
           </h3>
 
           <div v-if="task.task_type==='choice'">
@@ -659,12 +795,12 @@
           </div>
 
           <div v-if="task.task_type==='video' || task.task_type==='listen'">
-            <p style="font-size:13px;color:#667085">需有效观看至少 {{task.config.min_seconds||0}} 秒（服务端心跳校验，当前 {{videoWatched}}s）</p>
+            <p style="font-size:13px;color:#667085">需有效观看至少 {{task.config.min_seconds||0}} 秒（服务端心跳校验，当前 {{watchedOf(task.id)}}s）</p>
             <video v-if="task.task_type==='video' && task.video_url" :src="task.video_url" controls
-              @play="ensureMediaSession(task)" @timeupdate="onMediaTime($event, task)"></video>
+              @play="onMediaPlay(task)" @timeupdate="onMediaTime($event, task)"></video>
             <audio v-if="task.task_type==='listen' && (task.audio_url || task.video_url)"
               :src="task.audio_url || task.video_url" controls
-              @play="ensureMediaSession(task)" @timeupdate="onMediaTime($event, task)"
+              @play="onMediaPlay(task)" @timeupdate="onMediaTime($event, task)"
               style="background:transparent"></audio>
             <div style="margin-top:10px">
               <button class="btn" @click="saveMediaTask(task)" :disabled="!canEditAssignment">提交进度</button>
@@ -721,9 +857,9 @@
             <p v-if="assessmentOf(task.id)" style="color:#667085;font-size:13px">{{assessmentOf(task.id).tips}}</p>
             <p v-if="recording && recordTarget==='task'" style="color:#3451b2;font-size:13px">识别中：{{liveTranscript || '…'}}</p>
             <div class="row">
-              <button class="btn warn" v-if="!recording || recordTarget!=='task'" @click="startRecord('task')"
+              <button class="btn warn" v-if="!recording || recordTarget!=='task' || recordTaskId!==task.id" @click="startRecord('task', task.id)"
                 :disabled="!canEditAssignment || recording">开始录音纠音</button>
-              <button class="btn" v-else-if="recording && recordTarget==='task'" @click="stopRecord(task)">停止并评分（{{recordSeconds}}s）</button>
+              <button class="btn" v-else-if="recording && recordTarget==='task' && recordTaskId===task.id" @click="stopRecord(task)">停止并评分（{{recordSeconds}}s）</button>
             </div>
           </div>
         </div>

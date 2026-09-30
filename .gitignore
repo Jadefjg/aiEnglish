@@ -1,6 +1,26 @@
-asset/
+# Local secrets & runtime
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Frontend deps
+frontend/node_modules/
+
+# Uploads & certs (keep placeholders)
+uploads/*
+!uploads/.gitkeep
+certs/*
+!certs/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Optional large media (keep folder; ignore if synced separately)
+# asset/*.mp4
 tmp/
-
-app/backend/__pycache__/
-app/frontend/node_modules/
-

@@ -145,6 +145,8 @@ class AssignmentUpdate(BaseModel):
     description: str | None = None
     due_at: datetime | None = None
     clear_due_at: bool = False
+    # 重开时是否把已交卷（未批改）打回进行中，便于补做
+    reset_submitted: bool = False
 
 
 class TaskAnswerPayload(BaseModel):
@@ -256,9 +258,11 @@ def grade_task(task_type: str, config: dict[str, Any], answer: dict[str, Any], q
         if expected:
             detail = {}
             hit = 0
+            pool = list(typed)
             for idx, w in enumerate(expected):
-                ok = w in typed
+                ok = w in pool
                 if ok:
+                    pool.remove(w)
                     hit += 1
                 detail[str(idx)] = {
                     "prompt": w, "typed": w if ok else None, "correct": w, "is_correct": ok,
@@ -282,6 +286,10 @@ def grade_task(task_type: str, config: dict[str, Any], answer: dict[str, Any], q
         pass_score = int(config.get("pass_score") or 60)
         assessment = answer.get("assessment") or {}
         completed = bool(audio_url) and duration >= min_seconds
+        provider = str(assessment.get("provider") or "").lower()
+        # 本地/浏览器引擎上限约 49–96，默认及格 60 会导致合法录音永远无法交卷
+        if provider in {"local", "browser-asr", "browser"}:
+            pass_score = min(pass_score, 50)
         if assessment.get("overall_score") is not None:
             score = int(round(float(assessment["overall_score"])))
             return score, (1 if score >= pass_score and completed else 0), {
@@ -292,9 +300,11 @@ def grade_task(task_type: str, config: dict[str, Any], answer: dict[str, Any], q
                 "pass_score": pass_score,
                 "transcript": assessment.get("recognized_text") or answer.get("transcript"),
             }
-        return (100 if completed else 0), (1 if completed else 0), {
+        # 无服务端评分时不可凭 URL 直接满分
+        return (0 if not completed else 40), (0), {
             "audio_url": audio_url, "duration_seconds": duration, "completed": completed,
             "transcript": answer.get("transcript"), "pass_score": pass_score,
+            "note": "awaiting server assessment via /voice",
         }
 
     raise HTTPException(status_code=400, detail="unknown task type")
@@ -333,9 +343,18 @@ def load_tasks(cursor, assignment_id: int) -> list[dict]:
     return rows
 
 
-def enrich_tasks(cursor, tasks: list[dict], hide_answers: bool = False) -> list[dict]:
+def enrich_tasks(
+    cursor,
+    tasks: list[dict],
+    hide_answers: bool = False,
+    hide_vocab_spelling: bool = False,
+) -> list[dict]:
     for task in tasks:
-        cfg = task["config"]
+        cfg = dict(task.get("config") or {})
+        if hide_answers:
+            # 交卷前不把标准答案写进 config（听写 expected_words / 题目 answer 等）
+            cfg.pop("expected_words", None)
+            task["config"] = cfg
         if task["task_type"] == "choice":
             ids = cfg.get("question_ids") or []
             if ids:
@@ -371,6 +390,19 @@ def enrich_tasks(cursor, tasks: list[dict], hide_answers: bool = False) -> list[
                         for w in ordered
                     ]
                     task.pop("words", None)
+                elif task["task_type"] == "vocab" and (hide_answers and hide_vocab_spelling):
+                    # 同作业含听写时，背单词只给释义/音标，避免串题
+                    task["words"] = [
+                        {
+                            "id": w["id"],
+                            "word": "••••",
+                            "phonetic": w.get("phonetic"),
+                            "meaning": w.get("meaning"),
+                            "example_sentence": None,
+                            "spelling_hidden": True,
+                        }
+                        for w in ordered
+                    ]
         elif task["task_type"] in {"video", "listen"}:
             filename = cfg.get("resource_filename")
             if filename:
@@ -447,7 +479,16 @@ def register_homework_routes(mysql_connection, current_user):
         require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id,username,display_name,role FROM users WHERE role='student' ORDER BY id")
+        if user["role"] == "admin":
+            cursor.execute("SELECT id,username,display_name,role FROM users WHERE role='student' ORDER BY id")
+        else:
+            cursor.execute(
+                "SELECT DISTINCT u.id,u.username,u.display_name,u.role FROM users u "
+                "JOIN class_members cm ON cm.user_id=u.id AND cm.member_role='student' "
+                "JOIN classes c ON c.id=cm.class_id AND c.teacher_id=%s AND c.status='active' "
+                "WHERE u.role='student' ORDER BY u.id",
+                (int(user["sub"]),),
+            )
         items = cursor.fetchall()
         cursor.close(); connection.close()
         return {"total": len(items), "items": items}
@@ -480,8 +521,36 @@ def register_homework_routes(mysql_connection, current_user):
             else:
                 student_ids = list(payload.student_ids)
                 if payload.assign_all_students:
-                    cursor.execute("SELECT id FROM users WHERE role='student'")
+                    # 仅本教师班级内学员，避免跨校全库派发
+                    if user["role"] == "admin":
+                        cursor.execute("SELECT id FROM users WHERE role='student'")
+                    else:
+                        cursor.execute(
+                            "SELECT DISTINCT cm.user_id AS id FROM class_members cm "
+                            "JOIN classes c ON c.id=cm.class_id AND c.teacher_id=%s AND c.status='active' "
+                            "WHERE cm.member_role='student'",
+                            (teacher_id,),
+                        )
                     student_ids = [r["id"] for r in cursor.fetchall()]
+                elif user["role"] != "admin" and student_ids:
+                    # 校验点名学员确属本教师班级
+                    placeholders = ",".join(["%s"] * len(student_ids))
+                    cursor.execute(
+                        f"SELECT DISTINCT cm.user_id AS id FROM class_members cm "
+                        f"JOIN classes c ON c.id=cm.class_id AND c.teacher_id=%s AND c.status='active' "
+                        f"WHERE cm.member_role='student' AND cm.user_id IN ({placeholders})",
+                        (teacher_id, *student_ids),
+                    )
+                    allowed = {int(r["id"]) for r in cursor.fetchall()}
+                    student_ids = [sid for sid in student_ids if int(sid) in allowed]
+            # 仅学生角色可被指派
+            if student_ids:
+                placeholders = ",".join(["%s"] * len(student_ids))
+                cursor.execute(
+                    f"SELECT id FROM users WHERE role='student' AND id IN ({placeholders})",
+                    tuple(int(x) for x in student_ids),
+                )
+                student_ids = [r["id"] for r in cursor.fetchall()]
             if not student_ids:
                 raise HTTPException(
                     status_code=400,
@@ -621,12 +690,17 @@ def register_homework_routes(mysql_connection, current_user):
                 )
                 submission = cursor.fetchone()
 
-        # 交卷后或作业关闭后对学生开放正确答案与解析
-        reveal_answers = is_owner or item["status"] == "closed" or (
-            submission and submission.get("status") in ("submitted", "reviewed")
-        )
+        # 仅交卷后揭晓；关闭作业对未交卷学生仍隐藏答案，避免关闭→偷看→重开作弊
+        submitted = bool(submission and submission.get("status") in ("submitted", "reviewed"))
+        reveal_answers = is_owner or submitted
         loaded_tasks = load_tasks(cursor, assignment_id)
-        tasks = enrich_tasks(cursor, loaded_tasks, hide_answers=not reveal_answers)
+        # 同作业同时有听写时，背单词也不下发拼写（防串题）
+        has_dictation = any(t.get("task_type") == "dictation" for t in loaded_tasks)
+        tasks = enrich_tasks(
+            cursor, loaded_tasks,
+            hide_answers=not reveal_answers,
+            hide_vocab_spelling=(not reveal_answers and has_dictation),
+        )
         result = {**item, "tasks": tasks, "accepting_answers": item["status"] == "published"}
         task_types = {t["id"]: t["task_type"] for t in loaded_tasks}
 
@@ -871,6 +945,14 @@ def register_homework_routes(mysql_connection, current_user):
             "UPDATE assignments SET status='published', due_at=%s, published_at=COALESCE(published_at,NOW()) WHERE id=%s",
             (due_at, assignment_id),
         )
+        reset_n = 0
+        if payload.reset_submitted:
+            cursor.execute(
+                "UPDATE assignment_submissions SET status='in_progress', submitted_at=NULL "
+                "WHERE assignment_id=%s AND status='submitted'",
+                (assignment_id,),
+            )
+            reset_n = cursor.rowcount or 0
         linked = 0
         if item.get("class_id"):
             linked = sync_assignment_class_members(cursor, assignment_id, int(item["class_id"]))
@@ -885,7 +967,7 @@ def register_homework_routes(mysql_connection, current_user):
         )
         return {
             "id": assignment_id, "status": "published", "due_at": due_at,
-            "members_synced": linked, "notified": notified,
+            "members_synced": linked, "notified": notified, "reset_submitted": reset_n,
         }
 
     @router.post("/api/assignments/{assignment_id}/tasks/{task_id}/answer")
@@ -920,9 +1002,12 @@ def register_homework_routes(mysql_connection, current_user):
         if not task:
             cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="task not found")
-        if task["task_type"] == "voice" and not (payload.answer or {}).get("audio_url"):
+        if task["task_type"] == "voice":
             cursor.close(); connection.close()
-            raise HTTPException(status_code=400, detail="upload voice first via /voice endpoint")
+            raise HTTPException(
+                status_code=400,
+                detail="voice tasks must use /voice endpoint; client assessment is not accepted",
+            )
 
         config = parse_json(task["config_json"])
         answer = dict(payload.answer or {})
@@ -1263,16 +1348,19 @@ def register_homework_routes(mysql_connection, current_user):
             cursor.close(); connection.close()
             raise HTTPException(status_code=403, detail="not your assignment")
         cursor.execute(
-            "SELECT student_id FROM assignment_submissions WHERE id=%s AND assignment_id=%s",
+            "SELECT student_id,status FROM assignment_submissions WHERE id=%s AND assignment_id=%s",
             (submission_id, assignment_id),
         )
         sub_row = cursor.fetchone()
         if not sub_row:
             cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="submission not found")
+        if sub_row["status"] not in ("submitted", "reviewed"):
+            cursor.close(); connection.close()
+            raise HTTPException(status_code=400, detail="only submitted submissions can be reviewed")
         cursor.execute(
             "UPDATE assignment_submissions SET status='reviewed', score=%s, teacher_comment=%s "
-            "WHERE id=%s AND assignment_id=%s",
+            "WHERE id=%s AND assignment_id=%s AND status IN ('submitted','reviewed')",
             (payload.score, payload.teacher_comment, submission_id, assignment_id),
         )
         if cursor.rowcount == 0:
@@ -1300,11 +1388,35 @@ def register_homework_routes(mysql_connection, current_user):
     def review_vocab(word_id: int, payload: VocabReviewPayload, user=Depends(current_user)):
         require_role(user, "student", "teacher", "admin")
         connection = require_db(mysql_connection)
-        cursor = connection.cursor()
+        cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT id FROM words WHERE id=%s", (word_id,))
         if not cursor.fetchone():
             cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="word not found")
+        # 学生只能复习自己可见词库中的词，避免借 review 枚举全库
+        if user.get("role") == "student":
+            uid = int(user["sub"])
+            cursor.execute(
+                "SELECT 1 FROM vocab_progress WHERE user_id=%s AND word_id=%s",
+                (uid, word_id),
+            )
+            allowed = bool(cursor.fetchone())
+            if not allowed:
+                cursor.execute(
+                    "SELECT t.config_json FROM assignment_tasks t "
+                    "JOIN assignments a ON a.id=t.assignment_id "
+                    "JOIN assignment_students s ON s.assignment_id=a.id AND s.student_id=%s "
+                    "WHERE t.task_type='vocab' AND a.status IN ('published','closed')",
+                    (uid,),
+                )
+                for row in cursor.fetchall():
+                    cfg = parse_json(row.get("config_json")) or {}
+                    if word_id in {int(x) for x in (cfg.get("word_ids") or []) if str(x).isdigit() or isinstance(x, int)}:
+                        allowed = True
+                        break
+            if not allowed:
+                cursor.close(); connection.close()
+                raise HTTPException(status_code=403, detail="word not in your practice set")
         cursor.execute(
             "INSERT INTO vocab_progress(user_id,word_id,mastery,last_reviewed_at) VALUES(%s,%s,%s,NOW()) "
             "ON DUPLICATE KEY UPDATE mastery=VALUES(mastery), last_reviewed_at=NOW()",
@@ -1315,13 +1427,53 @@ def register_homework_routes(mysql_connection, current_user):
 
     @router.get("/api/my/vocab")
     def my_vocab(user=Depends(current_user)):
+        """学生可见词库：已掌握进度 ∪ 已布置的「背单词」任务词（不含听写题词，防泄题）。"""
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
+        uid = int(user["sub"])
+        role = user.get("role")
+        if role in ("teacher", "admin"):
+            cursor.execute(
+                "SELECT w.id,w.word,w.phonetic,w.meaning,w.example_sentence,"
+                "COALESCE(p.mastery,0) AS mastery,p.last_reviewed_at "
+                "FROM words w LEFT JOIN vocab_progress p ON p.word_id=w.id AND p.user_id=%s ORDER BY w.id",
+                (uid,),
+            )
+            items = cursor.fetchall()
+            cursor.close(); connection.close()
+            return {"total": len(items), "items": items}
+
+        allowed_ids: set[int] = set()
         cursor.execute(
-            "SELECT w.id,w.word,w.phonetic,w.meaning,w.example_sentence,"
-            "COALESCE(p.mastery,0) AS mastery,p.last_reviewed_at "
-            "FROM words w LEFT JOIN vocab_progress p ON p.word_id=w.id AND p.user_id=%s ORDER BY w.id",
-            (int(user["sub"]),),
+            "SELECT word_id FROM vocab_progress WHERE user_id=%s",
+            (uid,),
+        )
+        allowed_ids.update(int(r["word_id"]) for r in cursor.fetchall())
+        # 仅 vocab 任务可暴露拼写；dictation 任务的 word_ids 不进入自由练习词库
+        cursor.execute(
+            "SELECT t.config_json FROM assignment_tasks t "
+            "JOIN assignments a ON a.id=t.assignment_id "
+            "JOIN assignment_students s ON s.assignment_id=a.id AND s.student_id=%s "
+            "WHERE t.task_type='vocab' AND a.status IN ('published','closed')",
+            (uid,),
+        )
+        for row in cursor.fetchall():
+            cfg = parse_json(row.get("config_json")) or {}
+            for wid in cfg.get("word_ids") or []:
+                try:
+                    allowed_ids.add(int(wid))
+                except (TypeError, ValueError):
+                    continue
+        if not allowed_ids:
+            cursor.close(); connection.close()
+            return {"total": 0, "items": []}
+        placeholders = ",".join(["%s"] * len(allowed_ids))
+        cursor.execute(
+            f"SELECT w.id,w.word,w.phonetic,w.meaning,w.example_sentence,"
+            f"COALESCE(p.mastery,0) AS mastery,p.last_reviewed_at "
+            f"FROM words w LEFT JOIN vocab_progress p ON p.word_id=w.id AND p.user_id=%s "
+            f"WHERE w.id IN ({placeholders}) ORDER BY w.id",
+            (uid, *sorted(allowed_ids)),
         )
         items = cursor.fetchall()
         cursor.close(); connection.close()
@@ -1359,7 +1511,16 @@ def register_homework_routes(mysql_connection, current_user):
         tmp_path = Path(tmp_name)
         try:
             tmp_path.write_bytes(content)
-            assessment = assess_audio(tmp_path, reference, float(duration_seconds or 0), transcript=transcript or "")
+            trust_browser = os.getenv("PRONUNCIATION_TRUST_BROWSER_ASR", "0").strip().lower() in {
+                "1", "true", "yes",
+            }
+            assessment = assess_audio(
+                tmp_path,
+                reference,
+                float(duration_seconds or 0),
+                transcript=(transcript or "") if trust_browser else "",
+                allow_client_transcript=trust_browser,
+            )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"pronunciation assessment failed: {exc}") from exc
         finally:

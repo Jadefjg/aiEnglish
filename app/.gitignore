@@ -1,6 +1,0 @@
-certs/*.pem
-.env
-frontend/node_modules/
-backend/__pycache__/
-uploads/
-uploads/**/*

@@ -158,11 +158,25 @@ def register_booking_routes(mysql_connection, current_user):
             cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="slot already started")
         uid = int(user["sub"])
-        # 预约前校验剩余课时，避免约满后完成时才发现无课时
-        bal = get_hour_balance(cursor, uid)
-        if _dec(bal["remain_hours"]) <= 0:
+        # 预约前按「剩余课时 − 已预约未完成场次」校验；锁住已预约行防并发击穿
+        ensure_hour_package(cursor, uid)
+        bal = get_hour_balance(cursor, uid, for_update=True)
+        cursor.execute(
+            "SELECT id FROM tutor_bookings WHERE student_id=%s AND status='booked' FOR UPDATE",
+            (uid,),
+        )
+        pending_rows = cursor.fetchall()
+        pending = len(pending_rows)
+        reserved = _dec(pending + 1)
+        if _dec(bal["remain_hours"]) < reserved:
             cursor.close(); connection.close()
-            raise HTTPException(status_code=400, detail="insufficient hours; please renew before booking")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"insufficient hours for booking "
+                    f"(need {float(reserved)}, remain {bal['remain_hours']}, pending {pending})"
+                ),
+            )
         try:
             cursor.execute(
                 "UPDATE tutor_slots SET status='booked' WHERE id=%s AND status='open'",
@@ -170,11 +184,31 @@ def register_booking_routes(mysql_connection, current_user):
             )
             if cursor.rowcount != 1:
                 raise HTTPException(status_code=409, detail="slot just booked by others")
+            # uk_tutor_slot(slot_id) 唯一：取消后必须复用行，不能再 INSERT
             cursor.execute(
-                "INSERT INTO tutor_bookings(slot_id,student_id,status,note) VALUES(%s,%s,'booked',%s)",
-                (slot_id, uid, payload.note),
+                "SELECT id,status FROM tutor_bookings WHERE slot_id=%s FOR UPDATE",
+                (slot_id,),
             )
-            bid = cursor.lastrowid
+            prev = cursor.fetchone()
+            if prev:
+                if prev["status"] == "booked":
+                    raise HTTPException(status_code=409, detail="slot just booked by others")
+                if prev["status"] == "completed":
+                    raise HTTPException(status_code=400, detail="slot already completed")
+                cursor.execute(
+                    "UPDATE tutor_bookings SET student_id=%s, status='booked', note=%s "
+                    "WHERE id=%s AND status='cancelled'",
+                    (uid, payload.note, int(prev["id"])),
+                )
+                if cursor.rowcount != 1:
+                    raise HTTPException(status_code=409, detail="slot just booked by others")
+                bid = int(prev["id"])
+            else:
+                cursor.execute(
+                    "INSERT INTO tutor_bookings(slot_id,student_id,status,note) VALUES(%s,%s,'booked',%s)",
+                    (slot_id, uid, payload.note),
+                )
+                bid = cursor.lastrowid
             connection.commit()
         except HTTPException:
             connection.rollback(); cursor.close(); connection.close()
@@ -206,19 +240,23 @@ def register_booking_routes(mysql_connection, current_user):
         require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM tutor_slots WHERE id=%s", (slot_id,))
+        try:
+            cursor.execute("START TRANSACTION")
+        except Exception:
+            pass
+        cursor.execute("SELECT * FROM tutor_slots WHERE id=%s FOR UPDATE", (slot_id,))
         slot = cursor.fetchone()
         if not slot:
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="slot not found")
         if user["role"] != "admin" and slot["teacher_id"] != int(user["sub"]):
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=403, detail="forbidden")
         if slot["status"] in ("cancelled", "completed"):
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="slot already closed")
         cursor.execute(
-            "SELECT id,student_id FROM tutor_bookings WHERE slot_id=%s AND status='booked'",
+            "SELECT id,student_id FROM tutor_bookings WHERE slot_id=%s AND status='booked' FOR UPDATE",
             (slot_id,),
         )
         booked = cursor.fetchall()
@@ -226,7 +264,13 @@ def register_booking_routes(mysql_connection, current_user):
             "UPDATE tutor_bookings SET status='cancelled' WHERE slot_id=%s AND status='booked'",
             (slot_id,),
         )
-        cursor.execute("UPDATE tutor_slots SET status='cancelled' WHERE id=%s", (slot_id,))
+        cursor.execute(
+            "UPDATE tutor_slots SET status='cancelled' WHERE id=%s AND status IN ('open','booked')",
+            (slot_id,),
+        )
+        if cursor.rowcount != 1:
+            connection.rollback(); cursor.close(); connection.close()
+            raise HTTPException(status_code=409, detail="slot status changed; retry")
         connection.commit(); cursor.close(); connection.close()
         for b in booked:
             create_notification(
@@ -246,25 +290,38 @@ def register_booking_routes(mysql_connection, current_user):
     def cancel_booking(booking_id: int, user=Depends(current_user)):
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
+        try:
+            cursor.execute("START TRANSACTION")
+        except Exception:
+            pass
         cursor.execute(
             "SELECT b.*,s.teacher_id,s.starts_at FROM tutor_bookings b "
-            "JOIN tutor_slots s ON s.id=b.slot_id WHERE b.id=%s",
+            "JOIN tutor_slots s ON s.id=b.slot_id WHERE b.id=%s FOR UPDATE",
             (booking_id,),
         )
         row = cursor.fetchone()
         if not row:
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="booking not found")
         uid = int(user["sub"])
         role = user["role"]
         if role not in ("admin",) and uid not in (row["student_id"], row["teacher_id"]):
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=403, detail="forbidden")
         if row["status"] != "booked":
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="booking not cancellable")
-        cursor.execute("UPDATE tutor_bookings SET status='cancelled' WHERE id=%s", (booking_id,))
-        cursor.execute("UPDATE tutor_slots SET status='open' WHERE id=%s", (row["slot_id"],))
+        cursor.execute(
+            "UPDATE tutor_bookings SET status='cancelled' WHERE id=%s AND status='booked'",
+            (booking_id,),
+        )
+        if cursor.rowcount != 1:
+            connection.rollback(); cursor.close(); connection.close()
+            raise HTTPException(status_code=409, detail="booking already completed or cancelled")
+        cursor.execute(
+            "UPDATE tutor_slots SET status='open' WHERE id=%s AND status='booked'",
+            (row["slot_id"],),
+        )
         connection.commit(); cursor.close(); connection.close()
         other = int(row["teacher_id"] if uid == row["student_id"] else row["student_id"])
         create_notification(
@@ -321,6 +378,10 @@ def register_booking_routes(mysql_connection, current_user):
         if not locked or locked["status"] != "booked":
             connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="booking not active")
+        # 预约按 1 课时预留；结课默认 1，禁止一次超额扣远超预留
+        if hours > _dec(1):
+            connection.rollback(); cursor.close(); connection.close()
+            raise HTTPException(status_code=400, detail="hours_cost cannot exceed reserved 1.0 hour per booking")
         if hours > 0:
             ensure_hour_package(cursor, sid, int(user["sub"]))
             bal = get_hour_balance(cursor, sid, for_update=True)

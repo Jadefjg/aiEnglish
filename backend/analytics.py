@@ -277,7 +277,7 @@ def register_analytics_routes(mysql_connection, current_user):
             "JOIN assignment_submissions sub ON sub.id=ta.submission_id "
             "JOIN assignments a ON a.id=sub.assignment_id "
             "JOIN assignment_tasks t ON t.id=ta.task_id "
-            "WHERE sub.student_id=%s AND t.task_type IN ('choice','listen','dictation') "
+            "WHERE sub.student_id=%s AND t.task_type IN ('choice','dictation') "
             "AND sub.status IN ('submitted','reviewed') "
             "AND (ta.is_correct=0 OR ta.score < 100) "
             "ORDER BY sub.submitted_at DESC, ta.id DESC LIMIT 50",

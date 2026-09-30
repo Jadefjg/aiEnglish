@@ -197,6 +197,13 @@ def verify_media_progress(
         raise HTTPException(status_code=400, detail="media session not found")
     if not hmac.compare_digest(sess["token_hash"], _hash_token(token)):
         raise HTTPException(status_code=403, detail="invalid media token")
+    expires = sess.get("expires_at")
+    if expires is not None:
+        now = datetime.now(CST).replace(tzinfo=None)
+        if hasattr(expires, "tzinfo") and expires.tzinfo is not None:
+            expires = expires.astimezone(CST).replace(tzinfo=None)
+        if expires < now:
+            raise HTTPException(status_code=400, detail="media session expired")
     trusted = int(float(sess.get("cumulative_watch") or 0))
     # 客户端上报只能更小，不能更大
     return max(0, min(int(claimed_seconds or 0), trusted))

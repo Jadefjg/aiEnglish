@@ -30,9 +30,9 @@ from backend.parents import register_parent_routes
 from backend.pronunciation import provider_status as pronunciation_provider_status
 from backend.storage import UPLOAD_DIR, ensure_local_dirs, public_or_presigned_url, read_bytes, storage_status
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = Path(os.getenv("ASSET_DIR", ROOT / "asset"))
-FRONTEND_DIR = ROOT / "app" / "frontend"
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", ROOT / "frontend"))
 CATALOG_PATH = Path(__file__).with_name("catalog.json")
 AUDIT_PATH = Path(__file__).with_name("reports") / "asset_audit.json"
 ensure_local_dirs()
@@ -304,9 +304,28 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
         if not hmac.compare_digest(signature, expected): raise ValueError
         payload = json.loads(base64.urlsafe_b64decode(body + "=="))
         if int(payload["exp"]) < int(time.time()): raise ValueError
-        return payload
     except (ValueError, KeyError, json.JSONDecodeError):
         raise HTTPException(status_code=401, detail="invalid or expired token")
+    # 回源校验：账号删除/降权后立即失效
+    connection = mysql_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT id,username,role FROM users WHERE id=%s", (int(payload["sub"]),))
+            row = cursor.fetchone()
+            cursor.close(); connection.close()
+            if not row:
+                raise HTTPException(status_code=401, detail="user no longer exists")
+            payload["role"] = row["role"]
+            payload["username"] = row["username"]
+        except HTTPException:
+            raise
+        except Exception:
+            try:
+                connection.close()
+            except Exception:
+                pass
+    return payload
 
 
 @app.on_event("startup")

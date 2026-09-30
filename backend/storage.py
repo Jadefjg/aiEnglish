@@ -7,8 +7,8 @@ from typing import Any
 from urllib.parse import quote
 
 
-ROOT = Path(__file__).resolve().parents[2]
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", ROOT / "app" / "uploads"))
+ROOT = Path(__file__).resolve().parents[1]
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", ROOT / "uploads"))
 
 
 def _backend() -> str:

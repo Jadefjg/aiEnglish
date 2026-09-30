@@ -60,17 +60,24 @@
           listen_filename: "",
           min_seconds: 10,
           voice_prompt: "Please read aloud: Hello! Nice to meet you. My name is Tom.",
-          pass_score: 60,
+          pass_score: 50,
         },
         practiceIndex: 0,
         flipped: false,
         choiceAnswers: {},
-        videoWatched: 0,
+        videoWatchedByTask: {},
         mediaSessions: {},
         mediaLastBeat: {},
         dictationText: {},
         dashboard: null,
         wrongbook: [],
+        textbooks: [],
+        textbookForm: { title: "", level: "", description: "" },
+        chapterForm: { textbook_id: "", title: "", objectives: "", word_ids: [], question_ids: [], resource_filenames: [] },
+        bindBookForm: { class_id: "", textbook_id: "" },
+        assignChapterForm: { chapter_id: "", class_id: "", include_dictation: true, include_voice: false, due_days: 3 },
+        selectedTextbook: null,
+        chapters: [],
         editDueAt: "",
         recording: false,
         recorder: null,
@@ -78,6 +85,7 @@
         recordSeconds: 0,
         recordTimer: null,
         recordTarget: null,
+        recordTaskId: null,
         practiceText: "Hello! Nice to meet you. My name is Tom.",
         reviewForms: {},
         liveTranscript: "",
@@ -103,6 +111,10 @@
           student_id: "", title: "季度课时包", total_amount: 0,
           hours_included: 20, activate: true,
         },
+        paymentForm: { contract_id: "", amount: 0, hours_granted: 0, method: "transfer", note: "" },
+        reopenResetSubmitted: false,
+        quickWord: { word: "", meaning: "", phonetic: "", example: "" },
+        quickQuestion: { stem: "", option_a: "", option_b: "", option_c: "", option_d: "", answer: "A", explanation: "" },
       };
     },
     computed: {
@@ -145,8 +157,21 @@
     },
     methods: {
       async ok(r) {
+        if (r.status === 401) {
+          localStorage.removeItem("aienglish_token");
+          localStorage.removeItem("aienglish_user");
+          throw Error("登录已过期，请重新登录");
+        }
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw Error(typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail || r.status));
+        if (!r.ok) {
+          const detail = d.detail;
+          const msg = typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((x) => x.msg || JSON.stringify(x)).join("; ")
+              : JSON.stringify(detail || r.status);
+          throw Error(msg);
+        }
         return d;
       },
       async refresh() {
@@ -226,6 +251,12 @@
           this.inboxItems = data.items || [];
           this.inboxUnread = data.unread || 0;
           this.notifyChannels = data.channels || null;
+          if (data.user_channels) {
+            this.channelForm = {
+              wechat_openid: data.user_channels.wechat_openid || "",
+              notify_webhook: data.user_channels.notify_webhook || "",
+            };
+          }
         } catch (e) {
           if (!silent) this.error = e.message;
         }
@@ -456,6 +487,36 @@
           await this.loadOps(true);
         } catch (e) { this.error = e.message; }
       },
+      async recordPayment() {
+        const cid = Number(this.paymentForm.contract_id);
+        if (!cid) { this.error = "请选择合同"; return; }
+        if (!(Number(this.paymentForm.amount) > 0)) { this.error = "请填写到账金额"; return; }
+        try {
+          const r = await fetch(`/api/contracts/${cid}/payments`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              amount: Number(this.paymentForm.amount),
+              hours_granted: Number(this.paymentForm.hours_granted) || 0,
+              method: this.paymentForm.method || "transfer",
+              note: this.paymentForm.note || null,
+            }),
+          }).then(this.ok);
+          this.msg = `已登记缴费 ${r.amount}，入账课时 ${r.hours_granted}`;
+          this.paymentForm.amount = 0;
+          this.paymentForm.hours_granted = 0;
+          this.paymentForm.note = "";
+          await this.loadOps(true);
+        } catch (e) { this.error = e.message; }
+      },
+      pickContractForPay(c) {
+        this.paymentForm.contract_id = c.id;
+        const remainAmt = Math.max(0, Number(c.total_amount || 0) - Number(c.paid_amount || 0));
+        const remainHrs = Math.max(0, Number(c.hours_included || 0) - Number(c.hours_granted || 0));
+        this.paymentForm.amount = remainAmt;
+        this.paymentForm.hours_granted = remainHrs;
+        this.msg = `已选合同 #${c.id}，默认填入剩余应付`;
+      },
       async loadWrongbook(silent = false) {
         if (!this.isStudent) return;
         try {
@@ -467,20 +528,25 @@
       },
       async ensureMediaSession(task) {
         if (this.mediaSessions[task.id]) return this.mediaSessions[task.id];
-        const mediaKey = task.config.resource_filename || task.video_url || task.audio_url || "media";
-        const d = await fetch("/api/media/session/start", {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify({
-            assignment_id: this.selected.id,
-            task_id: task.id,
-            media_key: mediaKey,
-            duration_seconds: 0,
-          }),
-        }).then(this.ok);
-        this.mediaSessions[task.id] = { session_id: d.session_id, token: d.token };
-        this.mediaLastBeat[task.id] = 0;
-        return this.mediaSessions[task.id];
+        try {
+          const mediaKey = task.config.resource_filename || task.video_url || task.audio_url || "media";
+          const d = await fetch("/api/media/session/start", {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              assignment_id: this.selected.id,
+              task_id: task.id,
+              media_key: mediaKey,
+              duration_seconds: 0,
+            }),
+          }).then(this.ok);
+          this.mediaSessions[task.id] = { session_id: d.session_id, token: d.token };
+          this.mediaLastBeat[task.id] = 0;
+          return this.mediaSessions[task.id];
+        } catch (e) {
+          this.error = "媒体进度会话启动失败：" + e.message;
+          throw e;
+        }
       },
       async beatMedia(task, position, delta) {
         try {
@@ -495,7 +561,8 @@
               delta: Math.max(0, Number(delta) || 0),
             }),
           }).then(this.ok);
-          this.videoWatched = Math.max(this.videoWatched, r.eligible_seconds || 0);
+          const eligible = Number(r.eligible_seconds || 0);
+          this.videoWatchedByTask[task.id] = Math.max(this.watchedOf(task.id), eligible);
           return r;
         } catch (e) {
           this.error = e.message;
@@ -613,12 +680,11 @@
         this.msg = "";
         this.error = "";
         this.choiceAnswers = {};
-        this.videoWatched = 0;
+        this.videoWatchedByTask = {};
         this.submissions = [];
         this.reviewForms = {};
         this.mediaSessions = {};
         this.mediaLastBeat = {};
-        this.videoWatched = 0;
         try {
           this.selected = await fetch("/api/assignments/" + item.id, { headers: authHeaders(false) }).then(this.ok);
           if (this.isTeacher) {
@@ -640,7 +706,12 @@
                     if (!Number.isNaN(n)) this.choiceAnswers[n] = v;
                   }
                 }
-                if (a.answer && a.answer.watched_seconds) this.videoWatched = a.answer.watched_seconds;
+                if (a.answer && a.answer.watched_seconds != null) {
+                  this.videoWatchedByTask[a.task_id] = Number(a.answer.watched_seconds) || 0;
+                }
+                if (a.answer && a.answer.text) {
+                  this.dictationText[a.task_id] = a.answer.text;
+                }
               }
             }
             this.tab = "detail";
@@ -648,6 +719,9 @@
         } catch (e) {
           this.error = e.message;
         }
+      },
+      watchedOf(taskId) {
+        return Number(this.videoWatchedByTask[taskId] || 0);
       },
       taskAnswer(taskId) {
         const answers = (this.selected && this.selected.submission && this.selected.submission.answers) || [];
@@ -846,7 +920,7 @@
       },
       async onMediaTime(e, task) {
         const t = Number(e.target.currentTime || 0);
-        if (t > this.videoWatched) this.videoWatched = Math.floor(t);
+        if (t > this.watchedOf(task.id)) this.videoWatchedByTask[task.id] = Math.floor(t);
         const last = this.mediaLastBeat[task.id] || 0;
         if (t - last < 4) return;
         const delta = Math.min(8, Math.max(0, t - last));
@@ -856,14 +930,15 @@
       async saveMediaTask(task) {
         try {
           const sess = await this.ensureMediaSession(task);
-          await this.beatMedia(task, this.videoWatched, 1);
+          const watched = this.watchedOf(task.id);
+          await this.beatMedia(task, watched, 1);
           const r = await fetch(`/api/assignments/${this.selected.id}/tasks/${task.id}/answer`, {
             method: "POST",
             headers: authHeaders(),
             body: JSON.stringify({
               answer: {
-                watched_seconds: this.videoWatched,
-                completed: this.videoWatched >= (task.config.min_seconds || 0),
+                watched_seconds: this.watchedOf(task.id),
+                completed: this.watchedOf(task.id) >= (task.config.min_seconds || 0),
                 media_session_id: sess.session_id,
                 media_token: sess.token,
               },
@@ -917,17 +992,19 @@
         }
       },
       async reopenAssignment(item) {
-        if (!this.editDueAt) {
-          this.error = "重开需填写新的截止时间";
-          return;
-        }
+        if (!this.editDueAt && !confirm("未填截止时间将清除截止日期并重开，确认？")) return;
         try {
-          await fetch(`/api/assignments/${item.id}/reopen`, {
+          const body = this.editDueAt
+            ? { due_at: this.editDueAt, reset_submitted: !!this.reopenResetSubmitted }
+            : { clear_due_at: true, reset_submitted: !!this.reopenResetSubmitted };
+          const r = await fetch(`/api/assignments/${item.id}/reopen`, {
             method: "POST",
             headers: authHeaders(),
-            body: JSON.stringify({ due_at: this.editDueAt }),
+            body: JSON.stringify(body),
           }).then(this.ok);
-          this.msg = "作业已重开 #" + item.id;
+          this.msg = r.reset_submitted
+            ? `作业已重开，已打回 ${r.reset_submitted} 份交卷`
+            : "作业已重开 #" + item.id;
           this.editDueAt = "";
           await this.refresh();
         } catch (e) {
@@ -950,14 +1027,12 @@
         }
       },
       async markWord(task, wordId) {
-        const prev = this.taskAnswer(task.id);
-        const learned = new Set((prev && prev.answer && prev.answer.learned_word_ids) || []);
-        learned.add(wordId);
+        // 只上报新增词，避免与服务端「每次最多 1 个新词」规则冲突时误传整表
         try {
           const r = await fetch(`/api/assignments/${this.selected.id}/tasks/${task.id}/answer`, {
             method: "POST",
             headers: authHeaders(),
-            body: JSON.stringify({ answer: { learned_word_ids: [...learned] } }),
+            body: JSON.stringify({ answer: { learned_word_ids: [Number(wordId)] } }),
           }).then(this.ok);
           this.msg = r.answer.completed ? "单词全部掌握" : `已掌握 ${r.answer.learned_word_ids.length}/${r.answer.total}`;
           await this.openAssignment(this.selected);
@@ -965,7 +1040,7 @@
           this.error = e.message;
         }
       },
-      async startRecord(target) {
+      async startRecord(target, taskId = null) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           this.chunks = [];
@@ -976,6 +1051,7 @@
           this.recorder.start();
           this.recording = true;
           this.recordTarget = target || "task";
+          this.recordTaskId = taskId;
           this.recordSeconds = 0;
           this.startSpeechRecognition();
           this.recordTimer = setInterval(() => {
@@ -987,6 +1063,10 @@
       },
       async stopRecord(task) {
         if (!this.recorder) return;
+        if (this.recordTarget === "task" && task && this.recordTaskId && this.recordTaskId !== task.id) {
+          this.error = "请在开始录音的同一任务上停止";
+          return;
+        }
         clearInterval(this.recordTimer);
         this.stopSpeechRecognition();
         const duration = this.recordSeconds;
@@ -1114,6 +1194,189 @@
         } catch (e) {
           this.error = e.message;
         }
+      },
+      async loadCurriculum(silent = false) {
+        if (!this.isTeacher) return;
+        try {
+          const d = await fetch("/api/textbooks", { headers: authHeaders(false) }).then(this.ok);
+          this.textbooks = d.items || [];
+          if (!this.chapterForm.textbook_id && this.textbooks.length) {
+            this.chapterForm.textbook_id = this.textbooks[0].id;
+          }
+          if (!this.bindBookForm.textbook_id && this.textbooks.length) {
+            this.bindBookForm.textbook_id = this.textbooks[0].id;
+          }
+          if (!this.bindBookForm.class_id && this.classes.length) {
+            this.bindBookForm.class_id = this.classes[0].id;
+          }
+          if (!this.assignChapterForm.class_id && this.classes.length) {
+            this.assignChapterForm.class_id = this.classes[0].id;
+          }
+        } catch (e) {
+          if (!silent) this.error = e.message;
+        }
+      },
+      async createTextbook() {
+        if (!this.textbookForm.title.trim()) {
+          this.error = "请填写教材名称";
+          return;
+        }
+        try {
+          await fetch("/api/textbooks", {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify(this.textbookForm),
+          }).then(this.ok);
+          this.msg = "教材已创建";
+          this.textbookForm = { title: "", level: "", description: "" };
+          await this.loadCurriculum();
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async openTextbook(book) {
+        try {
+          this.selectedTextbook = book;
+          const d = await fetch(`/api/textbooks/${book.id}/chapters`, { headers: authHeaders(false) }).then(this.ok);
+          this.chapters = d.items || [];
+          this.chapterForm.textbook_id = book.id;
+          if (this.chapters.length) this.assignChapterForm.chapter_id = this.chapters[0].id;
+          this.tab = "curriculum";
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async createChapter() {
+        const tid = Number(this.chapterForm.textbook_id);
+        if (!tid || !this.chapterForm.title.trim()) {
+          this.error = "请选择教材并填写章节标题";
+          return;
+        }
+        try {
+          await fetch(`/api/textbooks/${tid}/chapters`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              title: this.chapterForm.title,
+              objectives: this.chapterForm.objectives || null,
+              word_ids: (this.chapterForm.word_ids || []).map(Number),
+              question_ids: (this.chapterForm.question_ids || []).map(Number),
+              resource_filenames: this.chapterForm.resource_filenames || [],
+            }),
+          }).then(this.ok);
+          this.msg = "章节已创建";
+          this.chapterForm.title = "";
+          this.chapterForm.objectives = "";
+          const book = this.textbooks.find((b) => b.id === tid) || this.selectedTextbook;
+          if (book) await this.openTextbook(book);
+          await this.loadCurriculum(true);
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async bindTextbook() {
+        const cid = Number(this.bindBookForm.class_id);
+        const tid = Number(this.bindBookForm.textbook_id);
+        if (!cid || !tid) {
+          this.error = "请选择班级与教材";
+          return;
+        }
+        try {
+          await fetch(`/api/classes/${cid}/textbooks`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ textbook_id: tid }),
+          }).then(this.ok);
+          this.msg = "教材已绑定到班级";
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async assignChapterHomework() {
+        const ch = Number(this.assignChapterForm.chapter_id);
+        if (!ch) {
+          this.error = "请先打开教材并选择章节";
+          return;
+        }
+        try {
+          const r = await fetch(`/api/chapters/${ch}/assign-homework`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              class_id: this.assignChapterForm.class_id ? Number(this.assignChapterForm.class_id) : null,
+              publish: !!this.assignChapterForm.class_id,
+              include_dictation: !!this.assignChapterForm.include_dictation,
+              include_voice: !!this.assignChapterForm.include_voice,
+              due_days: Number(this.assignChapterForm.due_days) || 3,
+            }),
+          }).then(this.ok);
+          this.msg = `已从章节生成作业 #${r.assignment_id}（${r.status}）`;
+          await this.refresh();
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async onHourStudentChange() {
+        if (!this.hourForm.student_id) return;
+        try {
+          this.hourBalance = await fetch(`/api/hours/students/${this.hourForm.student_id}`, {
+            headers: authHeaders(false),
+          }).then(this.ok);
+        } catch (e) {
+          this.error = e.message;
+        }
+      },
+      async onMediaPlay(task) {
+        try {
+          await this.ensureMediaSession(task);
+        } catch (_) {
+          /* error already set */
+        }
+      },
+      async createWordQuick() {
+        const word = (this.quickWord && this.quickWord.word || "").trim();
+        const meaning = (this.quickWord && this.quickWord.meaning || "").trim();
+        if (!word || !meaning) { this.error = "请填写单词与释义"; return; }
+        try {
+          const r = await fetch("/api/words", {
+            method: "POST", headers: authHeaders(),
+            body: JSON.stringify({
+              word,
+              meaning,
+              phonetic: (this.quickWord.phonetic || "").trim() || null,
+              example_sentence: (this.quickWord.example || "").trim() || null,
+            }),
+          }).then(this.ok);
+          this.words.push(r);
+          this.createForm.word_ids.push(r.id);
+          this.quickWord = { word: "", meaning: "", phonetic: "", example: "" };
+          this.msg = "单词已添加 #" + r.id;
+        } catch (e) { this.error = e.message; }
+      },
+      async createQuestionQuick() {
+        const q = this.quickQuestion || {};
+        if (!(q.stem || "").trim() || !(q.option_a || "").trim()) {
+          this.error = "请填写题干与选项";
+          return;
+        }
+        try {
+          const r = await fetch("/api/questions", {
+            method: "POST", headers: authHeaders(),
+            body: JSON.stringify({
+              stem: q.stem.trim(),
+              option_a: q.option_a.trim(),
+              option_b: (q.option_b || "").trim() || "B",
+              option_c: (q.option_c || "").trim() || "C",
+              option_d: (q.option_d || "").trim() || "D",
+              answer: (q.answer || "A").toUpperCase(),
+              explanation: (q.explanation || "").trim() || null,
+            }),
+          }).then(this.ok);
+          this.questions.push(r);
+          this.createForm.question_ids.push(r.id);
+          this.quickQuestion = { stem: "", option_a: "", option_b: "", option_c: "", option_d: "", answer: "A", explanation: "" };
+          this.msg = "题目已添加 #" + r.id;
+        } catch (e) { this.error = e.message; }
       },
     },
   }).mount("#learn-app");

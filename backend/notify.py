@@ -327,8 +327,22 @@ def register_notify_routes(mysql_connection, current_user):
             (int(user["sub"]),),
         )
         unread = int((cursor.fetchone() or {}).get("c") or 0)
+        cursor.execute(
+            "SELECT wechat_openid, notify_webhook FROM users WHERE id=%s",
+            (int(user["sub"]),),
+        )
+        prefs = cursor.fetchone() or {}
         cursor.close(); connection.close()
-        return {"total": len(items), "unread": unread, "items": items, "channels": notify_status()}
+        return {
+            "total": len(items),
+            "unread": unread,
+            "items": items,
+            "channels": notify_status(),
+            "user_channels": {
+                "wechat_openid": prefs.get("wechat_openid") or "",
+                "notify_webhook": prefs.get("notify_webhook") or "",
+            },
+        }
 
     @router.post("/api/notifications/{notification_id}/read")
     def mark_read(notification_id: int, user=Depends(current_user)):

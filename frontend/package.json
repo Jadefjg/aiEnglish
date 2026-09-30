@@ -1,0 +1,14 @@
+{
+  "name": "aienglish-web",
+  "private": true,
+  "version": "1.0.0",
+  "description": "静态页面 + Vue 全局构建（无 Vite/Webpack）。开发请用 API 服务或 Docker Compose。",
+  "scripts": {
+    "install:vue": "npm install --omit=dev",
+    "dev": "node ./dev-hint.js",
+    "serve": "npx --yes serve -l 5173 ."
+  },
+  "dependencies": {
+    "vue": "3.5.13"
+  }
+}

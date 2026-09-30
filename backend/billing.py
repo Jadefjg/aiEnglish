@@ -88,6 +88,16 @@ def register_billing_routes(mysql_connection, current_user):
         if not stu or stu["role"] != "student":
             cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="student not found")
+        if user["role"] != "admin":
+            cursor.execute(
+                "SELECT 1 FROM class_members cm "
+                "JOIN classes c ON c.id=cm.class_id AND c.teacher_id=%s AND c.status='active' "
+                "WHERE cm.user_id=%s AND cm.member_role='student' LIMIT 1",
+                (int(user["sub"]), payload.student_id),
+            )
+            if not cursor.fetchone():
+                cursor.close(); connection.close()
+                raise HTTPException(status_code=403, detail="student not in your classes")
         status = "active" if payload.activate else "draft"
         # 纯课时包（总额=0）或显式预授：激活即入账；否则等缴费按比例入账
         grant_now = (
@@ -186,27 +196,40 @@ def register_billing_routes(mysql_connection, current_user):
         require_role(user, "teacher", "admin")
         connection = require_db(mysql_connection)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM tuition_contracts WHERE id=%s", (contract_id,))
+        try:
+            cursor.execute("START TRANSACTION")
+        except Exception:
+            pass
+        cursor.execute("SELECT * FROM tuition_contracts WHERE id=%s FOR UPDATE", (contract_id,))
         contract = cursor.fetchone()
         if not contract:
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=404, detail="contract not found")
         if user["role"] != "admin" and contract["teacher_id"] != int(user["sub"]):
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=403, detail="not your contract")
         if contract["status"] == "cancelled":
-            cursor.close(); connection.close()
+            connection.rollback(); cursor.close(); connection.close()
             raise HTTPException(status_code=400, detail="contract cancelled")
 
         paid_at = payload.paid_at or datetime.now(CST).replace(tzinfo=None)
         if paid_at.tzinfo is not None:
             paid_at = paid_at.astimezone(CST).replace(tzinfo=None)
         amount = _d(payload.amount)
+        if amount <= 0:
+            connection.rollback(); cursor.close(); connection.close()
+            raise HTTPException(status_code=400, detail="amount must be positive")
+        remain_amount = max(_d(0), _d(contract["total_amount"]) - _d(contract["paid_amount"]))
+        if _d(contract["total_amount"]) > 0 and amount > remain_amount:
+            connection.rollback(); cursor.close(); connection.close()
+            raise HTTPException(
+                status_code=400,
+                detail=f"amount exceeds remain payable ({float(remain_amount)})",
+            )
         hours = _d(payload.hours_granted)
         remain_hours = max(_d(0), _d(contract["hours_included"]) - _d(contract["hours_granted"]))
         # 未显式指定课时时，按合同剩余应授课时比例折算
         if hours <= 0 and _d(contract["hours_included"]) > 0 and _d(contract["total_amount"]) > 0:
-            remain_amount = max(_d(0), _d(contract["total_amount"]) - _d(contract["paid_amount"]))
             if remain_amount > 0 and remain_hours > 0:
                 hours = (amount / remain_amount) * remain_hours
                 hours = min(hours, remain_hours).quantize(Decimal("0.1"))
@@ -220,17 +243,22 @@ def register_billing_routes(mysql_connection, current_user):
             (contract_id, amount, payload.method, paid_at, hours, payload.note, int(user["sub"])),
         )
         pid = cursor.lastrowid
-        new_paid = _d(contract["paid_amount"]) + amount
-        new_hours = _d(contract["hours_granted"]) + hours
-        new_status = contract["status"]
-        if new_status == "draft":
-            new_status = "active"
-        if new_paid >= _d(contract["total_amount"]) and _d(contract["total_amount"]) > 0:
-            new_status = "completed"
         cursor.execute(
-            "UPDATE tuition_contracts SET paid_amount=%s, hours_granted=%s, status=%s WHERE id=%s",
-            (new_paid, new_hours, new_status, contract_id),
+            "UPDATE tuition_contracts SET "
+            "paid_amount=paid_amount+%s, hours_granted=hours_granted+%s, "
+            "status=CASE "
+            "  WHEN status='cancelled' THEN 'cancelled' "
+            "  WHEN (paid_amount+%s) >= total_amount AND total_amount>0 THEN 'completed' "
+            "  WHEN status='draft' THEN 'active' "
+            "  ELSE status END "
+            "WHERE id=%s",
+            (amount, hours, amount, contract_id),
         )
+        cursor.execute("SELECT * FROM tuition_contracts WHERE id=%s", (contract_id,))
+        contract = cursor.fetchone()
+        new_paid = _d(contract["paid_amount"])
+        new_hours = _d(contract["hours_granted"])
+        new_status = contract["status"]
         if hours > 0:
             ensure_hour_package(cursor, int(contract["student_id"]), int(user["sub"]))
             cursor.execute(

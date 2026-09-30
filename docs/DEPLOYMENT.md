@@ -2,7 +2,7 @@
 
 本文档覆盖：系统定位、技术架构、业务能力、环境准备、本地/Docker/HTTPS 部署、数据库迁移、纠音配置、验收清单与运维排障。
 
-适用版本：应用 `2.4.x`（`app/backend/main.py`）
+适用版本：应用 `2.6.x`（`backend/main.py`）
 
 ---
 
@@ -46,7 +46,7 @@ Browser
 
 api
   ├─ MySQL(aienglish)
-  ├─ ASSET_DIR  → ../asset（教材视频/PDF）
+  ├─ ASSET_DIR  → ./asset（教材视频/PDF）
   └─ UPLOAD_DIR → ./uploads（运行时上传）
 ```
 
@@ -54,38 +54,42 @@ api
 
 ```text
 aiEnglish/
+├── README.md
+├── .env.example
+├── docker-compose.yml
+├── docker-compose.https.yml
+├── docker-compose.minio.yml
 ├── asset/                      # 教程素材（mp4/pdf），需自行放置
-└── app/
-    ├── DEPLOYMENT.md           # 本文档
-    ├── README.md
-    ├── .env.example
-    ├── docker-compose.yml
-    ├── docker-compose.https.yml
-    ├── nginx.conf / nginx.https.conf
-    ├── requirements.txt
-    ├── backend/
-    │   ├── main.py             # 入口：认证、资源目录、挂载
-    │   ├── homework.py         # 作业/词库/题库/纠音练习 API
-    │   ├── classes.py          # 班级管理
-    │   ├── parents.py          # 家长绑定与学情
-    │   ├── pronunciation.py    # Azure / Whisper / 浏览器 ASR / 本地评分
-    │   ├── storage.py          # local / S3 / MinIO 上传存储
-    │   ├── notify.py           # 站内信 + Webhook + 微信模板
-    │   ├── catalog.json        # 功能与媒体元数据
-    │   └── Dockerfile
-    ├── frontend/
-    │   ├── index.html          # 教程中心
-    │   ├── learn.html/js       # 学习工作台
-    │   ├── auth.js             # 登录浮层
-    │   └── Dockerfile
-    ├── db/
-    │   ├── schema.sql          # 首次初始化
-    │   ├── migrate.sh
-    │   └── migrations/         # 000~005 增量迁移
-    ├── uploads/                # 语音上传（运行时生成）
-    └── scripts/
-        ├── generate-dev-cert.sh
-        └── acceptance_smoke.py
+├── backend/                    # FastAPI 包（仓库根为 PYTHONPATH）
+│   ├── main.py                 # 入口：认证、资源目录、挂载
+│   ├── homework.py             # 作业/词库/题库/纠音练习 API
+│   ├── classes.py              # 班级管理
+│   ├── parents.py              # 家长绑定与学情
+│   ├── pronunciation.py        # Azure / Whisper / 浏览器 ASR / 本地评分
+│   ├── storage.py              # local / S3 / MinIO 上传存储
+│   ├── notify.py               # 站内信 + Webhook + 微信模板
+│   ├── catalog.json            # 功能与媒体元数据
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/                   # 静态 Vue 页（Nginx 镜像打包）
+│   ├── index.html              # 教程中心
+│   ├── learn.html / learn.js   # 学习工作台
+│   ├── auth.js                 # 登录浮层
+│   └── Dockerfile
+├── db/
+│   ├── schema.sql              # 首次初始化
+│   ├── migrate.sh
+│   └── migrations/             # 000~010 增量迁移
+├── nginx/
+│   ├── nginx.conf
+│   └── nginx.https.conf
+├── docs/
+│   └── DEPLOYMENT.md           # 本文档
+├── scripts/
+│   ├── generate-dev-cert.sh
+│   └── acceptance_smoke.py
+├── uploads/                    # 语音上传（运行时生成）
+└── certs/                      # HTTPS 证书（可选）
 ```
 
 ### 2.4 数据迁移一览
@@ -189,14 +193,14 @@ Compose 每次启动会对 `migrations/*.sql` 全量重放（脚本需幂等）�
 
 ### 4.3 素材目录
 
-将 PDF / MP4 放到仓库根目录的 `asset/`（与 `app/` 同级）：
+将 PDF / MP4 放到仓库根目录的 `asset/`：
 
 ```text
 aiEnglish/asset/*.mp4
 aiEnglish/asset/*.pdf
 ```
 
-Compose 中 API 通过 `../asset:/srv/asset` 挂载。目录不存在时 API 会自动创建空目录，但教程视频将不可用。
+Compose 中 API 通过 `./asset:/srv/asset` 挂载。目录不存在时 API 会自动创建空目录，但教程视频将不可用。
 
 ### 4.4 网络安全
 
@@ -211,7 +215,6 @@ Compose 中 API 通过 `../asset:/srv/asset` 挂载。目录不存在时 API 会
 复制模板并修改：
 
 ```bash
-cd app
 cp .env.example .env
 ```
 
@@ -237,7 +240,7 @@ cp .env.example .env
 | `WECHAT_DEFAULT_URL` / `WECHAT_TEMPLATE_DATA_JSON` | 否 | 模板跳转与字段映射 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | 本地开发 | 直连外部 MySQL 时使用 |
 | `ASSET_DIR` | 否 | 素材目录，默认仓库 `asset/` |
-| `UPLOAD_DIR` | 否 | 本地上传目录，Compose 内为 `/srv/app/uploads` |
+| `UPLOAD_DIR` | 否 | 本地上传目录，Compose 内为 `/srv/uploads` |
 
 示例（请替换为真实密钥）：
 
@@ -259,12 +262,11 @@ AZURE_SPEECH_LANGUAGE=en-US
 ### 6.1 一键启动（HTTP）
 
 ```bash
-cd app
 cp .env.example .env
 # 编辑 .env 填入强密码与 JWT_SECRET
 
 # 确保素材目录存在
-mkdir -p ../asset uploads
+mkdir -p asset uploads
 
 docker compose up --build -d
 ```
@@ -308,7 +310,7 @@ docker compose down -v
 ### 6.4 持久化
 
 - MySQL 数据：`mysql_data` Docker volume
-- 语音上传：宿主机 `app/uploads`（已挂载）
+- 语音上传：宿主机 `uploads/`（已挂载）
 - 教程素材：宿主机 `asset/`（只读业务数据，需自行备份）
 
 ---
@@ -318,7 +320,6 @@ docker compose down -v
 ### 7.1 开发自签名证书（仅本机调试）
 
 ```bash
-cd app
 chmod +x scripts/generate-dev-cert.sh
 ./scripts/generate-dev-cert.sh
 
@@ -327,12 +328,12 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml up --build -d
 
 访问：`https://localhost`（浏览器会提示自签名风险，可继续访问）。
 
-> Windows 若无 `sh`，可在 Git Bash / WSL 中执行证书脚本，或自行用 OpenSSL 生成 `app/certs/fullchain.pem` 与 `app/certs/privkey.pem`。
+> Windows 若无 `sh`，可在 Git Bash / WSL 中执行证书脚本，或自行用 OpenSSL 生成 `certs/fullchain.pem` 与 `certs/privkey.pem`。
 
 ### 7.2 公网正式证书
 
 1. 申请可信 CA 证书（Let's Encrypt / 云厂商等）
-2. 将证书放到 `app/certs/`：
+2. 将证书放到 `certs/`：
    - `fullchain.pem`
    - `privkey.pem`
 3. 启动：
@@ -341,7 +342,7 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml up --build -d
 docker compose -f docker-compose.yml -f docker-compose.https.yml up --build -d
 ```
 
-`nginx.https.conf` 已包含：
+`nginx/nginx.https.conf` 已包含：
 
 - HTTP → HTTPS 跳转
 - TLS 1.2 / 1.3
@@ -356,7 +357,6 @@ docker compose -f docker-compose.yml -f docker-compose.https.yml up --build -d
 适合改代码热重载；**业务功能仍需本机 MySQL**。
 
 ```bash
-cd app
 
 # 1) Python 环境
 python -m venv .venv
@@ -365,7 +365,7 @@ python -m venv .venv
 # Linux/macOS:
 # source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # 2) 前端 Vue 静态依赖
 cd frontend && npm install && cd ..
@@ -409,7 +409,6 @@ python scripts/acceptance_smoke.py
 只需保证 `migrations` 被执行（Compose 每次都会跑；本地用 `migrate.sh`）。
 
 ```bash
-cd app
 MYSQL_HOST=127.0.0.1 \
 MYSQL_USER=root \
 MYSQL_PASSWORD='你的密码' \
@@ -628,8 +627,8 @@ curl -s http://localhost:8080/api/health
 
 ```bash
 # 生产 HTTP
-cd app && cp .env.example .env   # 先编辑
-mkdir -p ../asset uploads
+cp .env.example .env   # 先编辑
+mkdir -p asset uploads
 docker compose up --build -d
 
 # 生产/联调 HTTPS

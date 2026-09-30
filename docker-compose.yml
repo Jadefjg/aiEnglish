@@ -18,11 +18,17 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     working_dir: /srv
-    volumes: ["./backend:/srv/backend", "./requirements.txt:/srv/requirements.txt", "../asset:/srv/asset", "./uploads:/srv/app/uploads"]
+    volumes:
+      - "./backend:/srv/backend"
+      - "./backend/requirements.txt:/srv/requirements.txt"
+      - "./frontend:/srv/frontend"
+      - "./asset:/srv/asset"
+      - "./uploads:/srv/uploads"
     expose: ["8000"]
     environment:
       ASSET_DIR: /srv/asset
-      UPLOAD_DIR: /srv/app/uploads
+      UPLOAD_DIR: /srv/uploads
+      FRONTEND_DIR: /srv/frontend
       MYSQL_HOST: mysql
       MYSQL_DATABASE: aienglish
       MYSQL_USER: root
